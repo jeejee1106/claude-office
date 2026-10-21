@@ -13,8 +13,8 @@
 | 2. 훅 확인(문서 + 실제 캡처) | 완료 |
 | 3. collector 구현 | 완료 |
 | 4. 테스트·통합 | 완료 |
-| 5. QA (B1·B2·B8) | 진행 중 |
-| 6. 문서 | 대기 |
+| 5. QA (B1·B2·B8) | 완료 — PASS 3 / FAIL 0 / 미검증 0 |
+| 6. 문서 | 진행 중 |
 | 7. PR | 대기 |
 
 ## 결정 필요
@@ -137,3 +137,30 @@
 | `pnpm exec biome check apps packages` | 오류 0 (86 files) — `pnpm lint` 는 1단계의 worktree 경로 문제로 이 환경에서만 실패 |
 
 apps/server 변경: **없음**. packages/shared 변경: **없음**. apps/web 변경: **없음**.
+
+## 5단계: QA — B1·B2·B8 (완료)
+
+integration-qa 에이전트 타입은 이 환경에 등록되어 있지 않아, integration-qa 스킬 절차대로 이 에이전트가 생산자·소비자 코드를 함께 열어 직접 대조했다. (구현자와 검증자가 같다는 한계가 있으니 아침에 한 번 더 봐 주시면 좋습니다.)
+
+# QA: collector (2026-10-22)
+## 요약: PASS 3 / FAIL 0 / 미검증 0
+
+## PASS
+- **[B1] 훅 페이로드 ↔ normalize**
+  - 사용하는 필드 `hook_event_name`, `session_id`, `agent_id`, `cwd`, `tool_name`, `tool_input`, `tool_use_id`, `source`, `reason`, `prompt`(길이만), `agent_type`, `notification_type`, `trigger` (`packages/collector/src/normalize.ts:69-189`) 는 전부 실제 캡처 fixture 또는 공식 문서에 있는 이름이다(`.claude/skills/claude-code-hooks/references/hook-notes.md`). 문서에만 있고 캡처 못 한 것: `notification_type`, `trigger`, PermissionRequest 형태.
+  - 서브에이전트 귀속: `agent_id` 있으면 그 값, 없으면 `main` (`normalize.ts:73-74`). 테스트 `normalize.test.ts` "서브에이전트 귀속 (B1)" 5건 + 4단계 실제 서버에서 서브에이전트 Read 가 `a9d6…` 로, 실제 Claude Code 실행에서 Glob 이 `a836…`(Explore) 로 귀속됨을 확인.
+  - fixture 28개 모두 `OfficeEvent.parse` 통과(`auth_success` 1개는 의도적으로 null).
+- **[B2] collector 전송 ↔ server `POST /events`**
+  - URL: 생산자 `send.ts:5` `http://${DEFAULT_HOST}:${DEFAULT_PORT}${PATHS.events}` ↔ 소비자 `apps/server/src/ingest.ts:15` `app.post(PATHS.events…)` — 둘 다 shared 상수(`/events`, 7333).
+  - 메서드 POST, `content-type: application/json` (`send.ts:47-50`), 바디는 단일 객체 `JSON.stringify(event)` (`hook.ts:77`) ↔ 서버는 단일·배열 모두 받고(`ingest.ts:36`) 항목별 `safeParse`(`ingest.ts:38`).
+  - Origin 헤더를 보내지 않음(테스트로 확인) ↔ 서버는 Origin 없으면 허용(`apps/server/src/origin.ts`).
+  - 바디 크기: 이벤트는 수백 바이트, 서버 제한 64KB(`ingest.ts:7`).
+  - 서버 없음: 연결 거부 시 59~63ms 에 exit 0, 무응답 서버에서는 561ms 에 exit 0 (`hook.test.ts`). 실제 서버로 27건 모두 202.
+- **[B8] 개인정보 규칙 ↔ normalize**
+  - 이벤트에 실리는 문자열: `sessionId`, `agentId`, `project`(cwd basename), `tool.name`, `tool.target`(60자 이하 요약), `tool.useId`, `agentType`, `reason`/`source`/`trigger`. 프롬프트는 길이(숫자)만.
+  - `tool_input` 은 target 추출에만 쓰고 버림. `tool_response`·`last_assistant_message`·`description`·`prompt`·`error` 는 읽지 않음.
+  - 테스트: fixture 전체에서 `/Users/`·사용자명·`.jsonl`·`redacted` 가 이벤트에 없음. 비밀 문자열을 프롬프트·Bash 인자·Edit 내용·WebSearch 질의·Agent 프롬프트·SubagentStop 메시지에 넣어도 이벤트에 없음(`normalize.test.ts` "개인정보 (B8)").
+
+## 참고 (FAIL 아님)
+- Grep/Glob 의 `target` 은 계약대로 "패턴 앞 30자"라서, Claude 가 비밀 문자열 자체를 검색하면 그 앞부분이 화면에 보일 수 있다. 계약이 허용한 범위다.
+- Bash 첫 토큰이 `$(cat` 처럼 어색하게 나올 수 있으나 표시만 어색할 뿐 유출은 아니다.
