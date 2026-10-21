@@ -14,12 +14,20 @@
 | 3. collector 구현 | 완료 |
 | 4. 테스트·통합 | 완료 |
 | 5. QA (B1·B2·B8) | 완료 — PASS 3 / FAIL 0 / 미검증 0 |
-| 6. 문서 | 진행 중 |
-| 7. PR | 대기 |
+| 6. 문서 | 완료 |
+| 7. PR | 진행 중 |
 
 ## 결정 필요
 
-(아직 없음)
+계약(`packages/shared`) 변경이 꼭 필요한 항목은 **없습니다**. 아래는 제가 임시로 정해 둔 것이니 확인해 주세요.
+
+1. **install 기본 대상**: 옵션 없이 `install` 하면 `--project`(현재 디렉터리)로 해 두었습니다. 전역 설정(`~/.claude`)을 말없이 바꾸지 않기 위해서입니다. "대시보드는 모든 세션을 보는 것"이 목적이라면 기본을 `--user` 로 바꾸는 편이 편할 수 있습니다.
+2. **동기 훅 vs `async: true`**: 지금은 동기 훅입니다(도구 호출마다 약 60ms, 서버가 무응답이면 최대 0.5초 지연). Claude Code 문서상 `"async": true` 로 등록하면 지연이 0이 되지만, 이벤트 순서가 뒤섞일 수 있고 `claude -p` 종료 시 취소됩니다. 체감 지연이 거슬리면 async 로 바꾸는 것을 검토해 주세요.
+3. **서브에이전트의 부모(`parentAgentId`)는 비워 둡니다**: 훅 입력에 부모를 가리키는 필드가 없고, 서브에이전트는 중첩될 수 있습니다(캡처로 확인). web 은 지금 `parentId` 를 쓰지 않아 화면 영향은 없습니다. 나중에 "팀원이 누구에게 보고하는지"를 보여 주려면 collector 에 작은 상태 파일을 두는 등 별도 설계가 필요합니다.
+4. **`agent.spawn` 의 `description` 은 비어 있습니다**: 작업 설명은 PreToolUse(Agent) 의 `tool_input.description` 에만 있고 SubagentStart 에는 없습니다. 둘을 잇는 ID 가 시작 시점에는 없어서(연결은 끝난 뒤 PostToolUse 의 `tool_response.agentId` 로만 가능) 보내지 않았습니다.
+5. **bin 이름 `claude-office`**: collector 의 설치 도구 이름으로 썼습니다. 나중에 `npx claude-office`(서버 실행) 패키징을 하면 이름이 겹치므로 그때 `claude-office install` 같은 하위 명령으로 합쳐야 합니다(범위 밖이라 손대지 않음).
+6. **문서로만 확인한 훅**: Notification, PreCompact, PermissionRequest 는 `claude -p` 에서 발생하지 않아 캡처하지 못했습니다. 대화형 Claude Code 에서 `/compact` 와 권한 요청을 한 번 일으켜 캡처하면 fixture 를 실제 값으로 바꿀 수 있습니다.
+7. (참고) 이벤트 카탈로그(`.claude/skills/event-contract/references/event-catalog.md`)의 "원천 훅(예정)" 열을 확인된 내용으로 고치는 것은 architect 담당이라 손대지 않았습니다. 확인 결과는 카탈로그의 예정과 같습니다(PostToolUseFailure 가 "실패 훅", PermissionRequest 가 attention 원천).
 
 ---
 
@@ -164,3 +172,10 @@ integration-qa 에이전트 타입은 이 환경에 등록되어 있지 않아, 
 ## 참고 (FAIL 아님)
 - Grep/Glob 의 `target` 은 계약대로 "패턴 앞 30자"라서, Claude 가 비밀 문자열 자체를 검색하면 그 앞부분이 화면에 보일 수 있다. 계약이 허용한 범위다.
 - Bash 첫 토큰이 `$(cat` 처럼 어색하게 나올 수 있으나 표시만 어색할 뿐 유출은 아니다.
+
+## 6단계: 문서 (완료)
+
+- 새 문서 `docs/connect-claude-code.md` "실제 Claude Code 연결하기": 빌드 → install(`--user`/`--project`) → `pnpm dev` → Claude Code 사용 → http://localhost:5173, 제거, 환경 변수, 문제 해결.
+- 문서의 명령 확인: `node packages/collector/dist/claude-office.js --help` 동작, 문제 해결의 `echo … | CLAUDE_OFFICE_DEBUG=1 node …/claude-office-hook.js` 실행 → 서버 꺼진 상태에서 `turn.end not sent: connect ECONNREFUSED 127.0.0.1:7333`, exit 0 (서버가 켜진 경우의 `→ 202` 는 4단계에서 확인). `pnpm dev` 가 server(`tsx watch`)·web(`vite`) dev 스크립트를 실행함을 package.json 에서 확인.
+- `docs/product-spec.md`: 화면 동작이 바뀌지 않아 **수정 안 함**.
+- `CLAUDE.md` 변경 이력: 하네스 파일(`.claude/skills/claude-code-hooks/references/hook-notes.md`)을 처음 채웠으므로 1행 추가.
