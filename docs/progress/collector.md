@@ -11,8 +11,8 @@
 | --- | --- |
 | 1. 환경 준비·기준선 | 완료 |
 | 2. 훅 확인(문서 + 실제 캡처) | 완료 |
-| 3. collector 구현 | 진행 중 |
-| 4. 테스트·통합 | 대기 |
+| 3. collector 구현 | 완료 |
+| 4. 테스트·통합 | 진행 중 (단위 테스트 완료, 실제 서버 통합 남음) |
 | 5. QA (B1·B2·B8) | 대기 |
 | 6. 문서 | 대기 |
 | 7. PR | 대기 |
@@ -57,3 +57,49 @@
 4. 실패한 도구는 PostToolUse 가 아니라 PostToolUseFailure 만 온다 → `tool.end status:error`.
 5. Edit 의 PostToolUse `tool_response.originalFile` 에 파일 전체가 들어 있다 → collector 는 `tool_input`/`tool_response` 에서 경로·명령 첫 토큰 등만 뽑고 나머지는 버린다.
 6. PermissionRequest 에는 `tool_use_id` 가 없다.
+
+### 2단계 추가: 중첩 서브에이전트 캡처
+
+공식 문서(sub-agents)에 "서브에이전트는 기본적으로 3단계까지 자기 서브에이전트를 만들 수 있다"고 되어 있어, 위 2번 판단("서브에이전트는 중첩 불가 → parent=main")이 **틀렸다**. general-purpose → Explore 중첩을 한 번 더 캡처했다(14건).
+- 자식의 SubagentStart 에도 부모 필드가 없다. 부모 서브에이전트 안의 `PreToolUse(Agent)` 에만 부모의 `agent_id` 가 붙는다.
+- 결론: **`parentAgentId` 는 채우지 않는다**(추측 금지). web 은 현재 `parentId` 를 쓰지 않아 화면 영향 없음.
+- fixture 추가: `SubagentStart.nested.json`, `PreToolUse.subagent-Agent.json`, `PreToolUse.nested-Glob.json` (총 28개)
+
+## 3단계: collector 구현 (완료)
+
+`packages/collector` (`@claude-office/collector`)
+
+| 파일 | 내용 |
+| --- | --- |
+| `src/normalize.ts` | 순수 함수 `normalize(hookInput, ctx): OfficeEvent \| null`. 12개 훅 → 10개 kind. 마지막에 `OfficeEvent.safeParse` 로 계약 검증(실패 시 null) |
+| `src/target.ts` | `tool.target`: 파일=basename, Bash=첫 토큰(환경변수 대입 건너뜀, 경로면 basename), Grep/Glob=패턴 30자(절대경로면 마지막 조각, `/Users/<이름>` 은 `~`), WebFetch=호스트, Agent=subagent_type, MCP=서버명, WebSearch 질의 등은 없음. 항상 60자 이하 |
+| `src/send.ts` | `node:http` POST, 500ms 타임아웃, 응답 본문 안 읽음 (fetch 보다 시작이 빠름) |
+| `src/hook.ts` | `claude-office-hook`: stdin → normalize → POST. 항상 exit 0, stdout 없음, 2초 강제 종료 안전망, `CLAUDE_OFFICE_DEBUG=1` 일 때만 stderr, `CLAUDE_OFFICE_DISABLE=1` 이면 아무것도 안 함 |
+| `src/settings.ts` | 순수 함수: `addOurHooks` / `removeOurHooks` / `lineDiff` |
+| `src/cli.ts` | `claude-office install\|uninstall [--project\|--user\|--settings <file>] [--dry-run]` |
+| `build.mjs` | esbuild 로 `dist/claude-office-hook.js`(461KB, zod 포함), `dist/claude-office.js` 번들. `package.json` bin 에 연결 |
+
+설계 결정 (사용자 확인 권장 항목은 "결정 필요"에도 적음)
+- **이벤트 ID**: 도구 이벤트는 `{sessionId}/{kind}/{tool_use_id}`, 서브에이전트 spawn/finish 는 `{sessionId}/{kind}/{agent_id}` 로 결정적으로 만든다 → user·project 양쪽에 중복 설치돼 훅이 두 번 돌아도 서버가 중복 제거한다. 나머지는 UUID.
+- **Notification**: `permission_prompt`→permission, `idle_prompt`→idle, `elicitation_dialog`/`elicitation_url_dialog`/`agent_needs_input`→other, 그 밖(`auth_success` 등)은 보내지 않음.
+- **PermissionRequest** → `attention permission`. Notification(permission_prompt)과 같이 오면 attention 이 두 번 가지만 reduce 결과는 같다.
+- **설치 형식**: 12개 이벤트마다 `{ "hooks": [{ "type": "command", "command": "node \"<절대경로>/dist/claude-office-hook.js\"", "timeout": 5 }] }` (matcher 생략 = 전체). 동기 훅. `async: true` 는 쓰지 않았다(아래 결정 필요).
+- **install 기본 대상**: `--project` (현재 디렉터리 `.claude/settings.json`). `--user` 는 명시해야 한다.
+
+명령과 결과
+| 명령 | 결과 |
+| --- | --- |
+| `pnpm install` | 성공 (esbuild 0.28.2 등 기존 스토어 재사용) |
+| `pnpm --filter @claude-office/collector typecheck` | 통과 |
+| `pnpm --filter @claude-office/collector test` | **136 통과** (4 파일, 스냅샷 27개 생성), 2.0초 |
+| `pnpm exec biome check --write packages/collector` | 포맷 6건 자동 수정 후 `biome check apps packages` 오류 0 (86 files) |
+| `pnpm typecheck` | shared·collector·server·web 모두 통과 |
+| `pnpm test` | shared 46 + web 76 + server 25 + collector 136 = **283 통과** |
+
+훅 지연(서버 없음, 연결 거부): **59 / 63 / 59 ms** (목표 < 300ms). 서버가 응답하지 않을 때: 561ms 후 exit 0.
+
+테스트 구성
+- `normalize.test.ts`: 모든 fixture 스냅샷 + `OfficeEvent.parse`, 개인정보(B8), 서브에이전트·중첩 귀속(B1), 모르는 훅·잘못된 입력 → null
+- `target.test.ts`: target 규칙 표 테스트
+- `hook.test.ts`: 실제 프로세스 실행 — 지연, exit 0, stdout 없음, 실제 HTTP 서버로 받은 요청이 `POST /events` + `application/json` + 단일 객체 + Origin 없음(B2), 타임아웃, DEBUG/DISABLE
+- `settings.test.ts`: 기존 훅이 있는 임시 settings.json 으로 install → install(멱등) → uninstall 왕복 후 **원본 텍스트와 동일**, `.bak`, `--dry-run`, 잘못된 JSON 은 건드리지 않음
