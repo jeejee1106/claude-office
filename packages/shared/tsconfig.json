@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // src는 Node·브라우저 양쪽에서 쓰이므로 DOM/Node 전용 API를 쓰지 않는다.
+    // node 타입은 test/ 의 fixture 파일 읽기 때문에만 포함한다.
+    "types": ["node"]
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

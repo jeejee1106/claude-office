@@ -1,0 +1,27 @@
+{
+  "name": "@claude-office/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Office local server: event ingest, OfficeState aggregation, WebSocket broadcast, record/replay.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@claude-office/shared": "workspace:*",
+    "@fastify/static": "10.1.5",
+    "@fastify/websocket": "11.3.3",
+    "fastify": "5.12.5",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/ws": "8.18.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.12",
+    "ws": "8.22.0"
+  }
+}

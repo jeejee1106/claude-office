@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // node 는 vite.config.ts(process.env)와 test/ 의 fixture 읽기 때문에만 포함한다.
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"]
+}

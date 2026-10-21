@@ -2,3 +2,7 @@ _workspace/
 _workspace_*/
 node_modules/
 dist/
+*.tsbuildinfo
+coverage/
+.vite/
+*.log

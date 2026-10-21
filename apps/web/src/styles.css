@@ -1,0 +1,288 @@
+:root {
+  --bg: #14162b;
+  --panel: #1f2240;
+  --panel-2: #262a4d;
+  --text: #e8e6f0;
+  --muted: #9a98b5;
+  --accent: #e07a5f;
+  --ok: #4ade80;
+  --warn: #ffd43b;
+  --err: #e03131;
+  --pixel-font: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font:
+    14px / 1.4 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 2px solid #0b0d1a;
+}
+
+.topbar h1 {
+  margin: 0;
+  font: 700 16px var(--pixel-font);
+  color: var(--accent);
+  margin-right: auto;
+}
+
+.badge {
+  padding: 2px 10px;
+  font: 600 12px var(--pixel-font);
+  border: 2px solid currentColor;
+}
+.badge-open {
+  color: var(--ok);
+}
+.badge-connecting {
+  color: var(--warn);
+}
+.badge-closed {
+  color: var(--err);
+  animation: blink 1s steps(2) infinite;
+}
+
+.session-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.session-picker select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #3a3f6b;
+  padding: 2px 4px;
+  max-width: 320px;
+}
+.session-empty {
+  color: var(--muted);
+}
+
+.layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.office {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.office-host {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.office-canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* 말풍선·이름표 DOM 오버레이 (캔버스와 같은 크기, 같은 위치) */
+.office-overlay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  overflow: hidden;
+}
+.office-overlay .nametag,
+.office-overlay .bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font: 600 11px / 1 var(--pixel-font);
+}
+.office-overlay .nametag {
+  color: #fff;
+  background: rgb(11 13 26 / 0.7);
+  padding: 1px 3px;
+}
+.office-overlay .nametag.highlight {
+  background: var(--warn);
+  color: #1b1f3b;
+}
+.office-overlay .bubble {
+  color: #1b1f3b;
+  background: #f4f4f4;
+  border: 2px solid #1b1f3b;
+  padding: 3px 5px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.office-offline .office-host {
+  filter: brightness(0.45) grayscale(0.5);
+}
+.office-offline-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--err);
+  color: #fff;
+  padding: 4px 12px;
+  font: 600 12px var(--pixel-font);
+}
+
+.side {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid #0b0d1a;
+  background: var(--panel);
+  min-height: 0;
+}
+
+.panel {
+  padding: 8px 12px;
+  border-bottom: 2px solid #0b0d1a;
+}
+.panel h2 {
+  margin: 0 0 6px;
+  font: 700 13px var(--pixel-font);
+  color: var(--muted);
+}
+.muted {
+  color: var(--muted);
+  margin: 0;
+}
+
+.agents,
+.timeline ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.agents button,
+.timeline button {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+.agents button:hover,
+.timeline button:hover {
+  background: var(--panel-2);
+}
+.agents .selected button,
+.timeline button.selected {
+  background: #3a3f6b;
+}
+.agent-name {
+  font-family: var(--pixel-font);
+  font-weight: 600;
+}
+.agent-state {
+  color: var(--muted);
+  margin-left: auto;
+  font-size: 12px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.dot-working {
+  background: var(--ok);
+}
+.dot-idle {
+  background: #9aa5b1;
+}
+.dot-waiting {
+  background: var(--warn);
+  animation: blink 0.8s steps(2) infinite;
+}
+.dot-gone {
+  background: #3a3f6b;
+}
+.dot-sleep {
+  background: #9ec5ff;
+}
+
+.timeline {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.timeline time {
+  color: var(--muted);
+  font: 11px var(--pixel-font);
+  flex: none;
+}
+.timeline .who {
+  font: 600 12px var(--pixel-font);
+  flex: none;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.timeline .what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeline button.error .what {
+  color: var(--err);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (max-width: 800px) {
+  .layout {
+    flex-direction: column;
+  }
+  .side {
+    width: auto;
+    border-left: none;
+    max-height: 45%;
+  }
+}

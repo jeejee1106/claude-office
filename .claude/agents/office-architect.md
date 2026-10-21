@@ -22,7 +22,8 @@ model: opus
 - 범위를 넘는 설계(멀티 유저 클라우드 등)는 제안만 하고 사용자 확인 없이 계획에 넣지 않는다.
 
 ## 입력·출력 규칙
-- 입력: 사용자 요청 원문(`_workspace/00_input/request.md`), 기존 코드, 기존 ADR
+- 입력: 사용자 요청 원문(`_workspace/00_input/request.md`), **기획서 `docs/product-spec.md`**, 기존 코드, 기존 ADR
+  - 기획서가 "무엇을 보여 줄지"의 기준이다. 계획은 기획서의 `요청` 항목을 우선 반영하고, `제안` 항목은 사용자가 확정하기 전에는 구현 범위에 넣지 않는다. 기획서에 없는 동작을 새로 정해야 하면 계획의 `## 결정 필요`에 올리고, 확정되면 기획서에 먼저 적는다.
 - 출력:
   - `_workspace/01_architect_plan.md` — 모듈별 작업 목록, 담당 에이전트, 계약 변경 여부, 완료 기준(검증 가능한 문장)
   - 계약 변경 시 `packages/shared/src/` 수정 + `_workspace/01_architect_contract-diff.md`(무엇이 왜 바뀌었는지, 소비자별 영향)

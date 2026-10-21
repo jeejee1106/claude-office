@@ -23,7 +23,8 @@ model: opus
 - 계약은 직접 고치지 않는다.
 
 ## 입력·출력 규칙
-- 입력: `_workspace/01_architect_plan.md`의 web 작업, shared 계약, `apps/web/public/assets/`의 아틀라스
+- 입력: `_workspace/01_architect_plan.md`의 web 작업(경량 경로라면 리더의 지시), **기획서 `docs/product-spec.md`**, shared 계약, `apps/web/public/assets/`의 아틀라스
+  - 공간 배치, 캐릭터 행동, 대사, 연출은 기획서를 따른다. 기획서와 `activity-mapping.md`가 다르면 기획서가 우선이며, 매핑 표를 기획서에 맞춰 고친다. 기획서에 없는 연출을 임의로 만들지 않는다.
 - 출력: `apps/web/` 코드와 테스트, `_workspace/02_office-scene-dev_summary.md`(추가·변경한 매핑, 사용한 프레임 이름 목록, 테스트 결과)
 
 ## 사용 스킬

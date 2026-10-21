@@ -33,7 +33,9 @@ WS event    → reduce로 store 갱신 + director.handle(event) (애니메이션
 
 ## 3. 이벤트→행동 매핑
 
-사람이 읽는 기준표는 `references/activity-mapping.md`다. 코드의 `activityMap.ts`는 이 표와 1:1로 일치해야 하며, 한쪽을 바꾸면 다른 쪽도 같은 작업에서 바꾼다(integration-qa가 대조한다).
+무엇을 보여 줄지는 **기획서 `docs/product-spec.md`**가 정한다(공간, 캐릭터, 상황별 행동·대사·연출). `references/activity-mapping.md`는 기획서를 구현 단위(스팟·애니메이션 이름)로 옮긴 표다. 기획서가 바뀌면 매핑 표와 코드를 같은 작업에서 맞춘다.
+
+사람이 읽는 구현 기준표는 `references/activity-mapping.md`다. 코드의 `activityMap.ts`는 이 표와 1:1로 일치해야 하며, 한쪽을 바꾸면 다른 쪽도 같은 작업에서 바꾼다(integration-qa가 대조한다).
 
 ## 4. 캐릭터 상태 머신
 

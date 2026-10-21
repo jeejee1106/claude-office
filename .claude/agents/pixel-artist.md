@@ -22,7 +22,7 @@ model: opus
 - 생성 결과는 Read 도구로 PNG를 직접 열어 눈으로 확인한다.
 
 ## 입력·출력 규칙
-- 입력: 계획 파일의 assets 작업, office-scene-dev의 에셋 요청(프레임 이름·크기·프레임 수·용도)
+- 입력: 계획 파일의 assets 작업, office-scene-dev의 에셋 요청(프레임 이름·크기·프레임 수·용도), **기획서 `docs/product-spec.md`**(분위기·공간·연출의 기준)
 - 출력: `packages/assets/src/` 생성 스크립트, `apps/web/public/assets/`의 PNG + 아틀라스 JSON, `_workspace/02_pixel-artist_summary.md`(추가한 프레임 이름 전체 목록)
 
 ## 사용 스킬
