@@ -1,6 +1,17 @@
 import { Container, Graphics } from 'pixi.js'
-import type { AnimName, Mark } from '../activityMap'
-import { BASE_HEIGHT, BASE_WIDTH, COLS, type Dir, type Prop, ROWS, TILE } from '../layout'
+import type { AnimName, Effect, Mark } from '../activityMap'
+import {
+  BASE_HEIGHT,
+  BASE_WIDTH,
+  COLS,
+  type Dir,
+  DOORWAYS,
+  isWall,
+  type Prop,
+  ROOMS,
+  ROWS,
+  TILE,
+} from '../layout'
 import type { CharacterView, SceneRenderer } from './types'
 
 /*
@@ -40,6 +51,21 @@ const C = {
   skin: 0xf2c29b,
   pants: 0x3a3f5c,
   zzz: 0x9ec5ff,
+  sweat: 0x8fd3ff,
+  sweatLight: 0xe0f4ff,
+  steam: 0xe8e8f0,
+  carpetA: 0xb5654a,
+  carpetB: 0xa95c43,
+  plankA: 0xc99a64,
+  plankB: 0xb98a56,
+  metalFloorA: 0x5d6675,
+  metalFloorB: 0x535b69,
+  tileA: 0xc9d3dc,
+  tileB: 0xbac5cf,
+  cable: 0x1f2937,
+  sofa: 0x4f6d9a,
+  sofaDark: 0x3c5478,
+  bag: 0x7a4a24,
 } as const
 
 /** variant 별 (셔츠, 머리) — 0 은 메인 고정 */
@@ -75,7 +101,9 @@ export class PlaceholderRenderer implements SceneRenderer {
   private dimTarget = 0.65
   private readonly leds = new Graphics()
   private ledMs = 0
-  private ledOn = false
+  private ledTick = 0
+  private serverBusy = false
+  private racks: readonly Prop[] = []
   private readonly views = new Set<PlaceholderCharacterView>()
 
   constructor(layers: PlaceholderLayers, domOverlay: HTMLElement) {
@@ -94,31 +122,56 @@ export class PlaceholderRenderer implements SceneRenderer {
 
   drawRoom(props: readonly Prop[]): void {
     const g = new Graphics()
-    // 바닥(체크 타일)
+    // 바닥: 방마다 다른 무늬(업무 공간=체크, 자료실=마루, 휴게실=카펫, 서버실=철판, 회의실=타일)
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         g.rect(c * TILE, r * TILE, TILE, TILE).fill((r + c) % 2 === 0 ? C.floorA : C.floorB)
       }
     }
-    // 벽: 위 2행, 좌우 1열, 아래 1행
+    for (const room of ROOMS) {
+      const a = room.area
+      for (let r = a.row; r < a.row + a.h; r++) {
+        for (let c = a.col; c < a.col + a.w; c++) drawFloorTile(g, room.floor, c, r)
+      }
+    }
+    // 바깥 벽: 위 2행, 좌우 1열, 아래 1행
     g.rect(0, 0, BASE_WIDTH, TILE * 2).fill(C.wall)
     g.rect(0, TILE * 2 - 3, BASE_WIDTH, 3).fill(C.wallTrim)
     g.rect(0, 0, TILE, BASE_HEIGHT).fill(C.wallDark)
     g.rect(BASE_WIDTH - TILE, 0, TILE, BASE_HEIGHT).fill(C.wallDark)
     g.rect(0, BASE_HEIGHT - TILE, BASE_WIDTH, TILE).fill(C.wallDark)
     g.rect(0, BASE_HEIGHT - TILE, BASE_WIDTH, 2).fill(C.wallTrim)
+    // 칸막이 벽(방 구분): 위에서 본 벽 윗면 + 아래쪽 벽면
+    for (let r = 2; r < ROWS - 1; r++) {
+      for (let c = 1; c < COLS - 1; c++) {
+        if (!isWall(c, r)) continue
+        const x = c * TILE
+        const y = r * TILE
+        const below = isWall(c, r + 1)
+        g.rect(x, y, TILE, TILE).fill(C.wallDark)
+        g.rect(x + 2, y, TILE - 4, below ? TILE : TILE - 5).fill(C.wall)
+        if (!below) g.rect(x, y + TILE - 5, TILE, 5).fill(C.wallTrim)
+      }
+    }
+    // 출입구: 바닥 + 문지방 + 양옆 문틀 기둥
+    for (const d of DOORWAYS) {
+      const x = d.col * TILE
+      const y = d.row * TILE
+      g.rect(x, y, TILE, TILE).fill(C.floorB)
+      g.rect(x + 7, y + 1, 2, TILE - 2).fill(C.woodDark)
+      g.rect(x, y, TILE, 2).fill(C.wallTrim)
+      g.rect(x, y + TILE - 2, TILE, 2).fill(C.wallTrim)
+      g.rect(x + 1, y - 3, 2, 3).fill(C.woodDark)
+      g.rect(x + TILE - 3, y - 3, 2, 3).fill(C.woodDark)
+    }
     this.layers.floor.addChild(g)
 
     const f = new Graphics()
     for (const p of props) drawProp(f, p)
     this.layers.furniture.addChild(f)
 
-    const rack = props.find((p) => p.kind === 'serverRack')
-    if (rack !== undefined) {
-      this.leds.x = rack.col * TILE
-      this.leds.y = rack.row * TILE
-      this.layers.furniture.addChild(this.leds)
-    }
+    this.racks = props.filter((p) => p.kind === 'serverRack')
+    this.layers.furniture.addChild(this.leds)
   }
 
   createCharacter(variant: number): CharacterView {
@@ -132,6 +185,11 @@ export class PlaceholderRenderer implements SceneRenderer {
 
   setLights(on: boolean): void {
     this.dimTarget = on ? 0 : 0.65
+  }
+
+  setServerBusy(busy: boolean): void {
+    this.serverBusy = busy
+    this.ledMs = Number.POSITIVE_INFINITY // 바로 다시 그린다
   }
 
   setScale(scale: number): void {
@@ -149,15 +207,24 @@ export class PlaceholderRenderer implements SceneRenderer {
       // 조명은 4단계로 끊어서(픽셀 아트 느낌) 바꾼다
       this.dimmer.alpha = Math.round(this.dimAlpha * 4) / 4
     }
+    // 서버 LED: 평소 0.5초, 명령 실행 중이면 0.1초마다 무작위처럼(결정적) 깜빡인다
     this.ledMs += dtMs
-    if (this.ledMs >= 400) {
+    const period = this.serverBusy ? 100 : 500
+    if (this.ledMs >= period) {
       this.ledMs = 0
-      this.ledOn = !this.ledOn
+      this.ledTick++
       this.leds.clear()
-      for (let i = 0; i < 4; i++) {
-        const on = (i % 2 === 0) === this.ledOn
-        this.leds.rect(3, 4 + i * 7, 2, 1).fill(on ? C.green : C.dark)
-        this.leds.rect(7, 4 + i * 7, 1, 1).fill(on && i === 1 ? C.red : C.dark)
+      for (const [ri, rack] of this.racks.entries()) {
+        const x = rack.col * TILE
+        const y = rack.row * TILE
+        for (let i = 0; i < 4; i++) {
+          const n = (this.ledTick * 7 + ri * 13 + i * 5) % 11
+          const on = this.serverBusy ? n < 6 : (i + ri + this.ledTick) % 2 === 0
+          this.leds.rect(x + 4, y + 4 + i * 7, 2, 1).fill(on ? C.green : C.dark)
+          this.leds.rect(x + 8, y + 4 + i * 7, 1, 1).fill(on && n % 3 === 0 ? C.yellow : C.dark)
+          if (i === 1 && ri === 0)
+            this.leds.rect(x + 11, y + 4 + i * 7, 1, 1).fill(this.ledTick % 2 ? C.red : C.dark)
+        }
       }
     }
   }
@@ -171,8 +238,42 @@ export class PlaceholderRenderer implements SceneRenderer {
 }
 
 // ---------------------------------------------------------------------------
-// 가구
+// 바닥·가구
 // ---------------------------------------------------------------------------
+
+function drawFloorTile(g: Graphics, kind: (typeof ROOMS)[number]['floor'], c: number, r: number) {
+  const x = c * TILE
+  const y = r * TILE
+  switch (kind) {
+    case 'checker':
+      g.rect(x, y, TILE, TILE).fill((r + c) % 2 === 0 ? C.floorA : C.floorB)
+      break
+    case 'wood':
+      // 마루: 가로 널판 2줄, 이음매 엇갈림
+      g.rect(x, y, TILE, 8).fill(C.plankA)
+      g.rect(x, y + 8, TILE, 8).fill(C.plankB)
+      g.rect(x, y + 7, TILE, 1).fill(C.woodLight)
+      g.rect(x + ((c % 2) * 8 + 3), y, 1, 8).fill(C.wood)
+      g.rect(x + (((c + 1) % 2) * 8 + 3), y + 8, 1, 8).fill(C.wood)
+      break
+    case 'carpet':
+      g.rect(x, y, TILE, TILE).fill(C.carpetA)
+      if ((r + c) % 2 === 0) g.rect(x + 6, y + 6, 4, 4).fill(C.carpetB)
+      break
+    case 'metal':
+      g.rect(x, y, TILE, TILE).fill((r + c) % 2 === 0 ? C.metalFloorA : C.metalFloorB)
+      g.rect(x, y, TILE, 1).fill(C.metalDark)
+      g.rect(x, y, 1, TILE).fill(C.metalDark)
+      g.rect(x + 2, y + 2, 1, 1).fill(C.metal)
+      g.rect(x + 13, y + 13, 1, 1).fill(C.metal)
+      break
+    case 'tile':
+      g.rect(x, y, TILE, TILE).fill((r + c) % 2 === 0 ? C.tileA : C.tileB)
+      g.rect(x, y + TILE - 1, TILE, 1).fill(C.metal)
+      g.rect(x + TILE - 1, y, 1, TILE).fill(C.metal)
+      break
+  }
+}
 
 function drawProp(g: Graphics, p: Prop): void {
   const x = p.col * TILE
@@ -227,15 +328,61 @@ function drawProp(g: Graphics, p: Prop): void {
       break
     }
     case 'cabinet':
-      g.rect(x + 1, y, w - 2, h).fill(C.metal)
-      for (let i = 0; i < 3; i++) {
-        g.rect(x + 2, y + 2 + i * 10, w - 4, 8).fill(C.metalDark)
-        g.rect(x + 6, y + 5 + i * 10, 4, 1).fill(C.white)
+      // 서류 캐비닛(타일 1칸 폭마다 한 대)
+      for (let cx = x; cx < x + w; cx += TILE) {
+        g.rect(cx + 1, y, TILE - 2, h).fill(C.metal)
+        for (let i = 0; i < 3; i++) {
+          g.rect(cx + 2, y + 2 + i * 10, TILE - 4, 8).fill(C.metalDark)
+          g.rect(cx + 6, y + 5 + i * 10, 4, 1).fill(C.white)
+        }
       }
       break
     case 'serverRack':
-      g.rect(x + 1, y - 4, w - 2, h + 4).fill(C.dark)
-      for (let i = 0; i < 4; i++) g.rect(x + 2, y + 2 + i * 7, w - 4, 5).fill(C.outline)
+      g.rect(x + 1, y - 4, w - 2, h + 4).fill(C.outline)
+      g.rect(x + 2, y - 3, w - 4, h + 2).fill(C.dark)
+      for (let i = 0; i < 4; i++) {
+        g.rect(x + 3, y + 2 + i * 7, w - 6, 5).fill(C.outline)
+        g.rect(x + 3, y + 6 + i * 7, w - 6, 1).fill(C.metalDark)
+      }
+      g.rect(x + 2, y + h - 2, w - 4, 2).fill(C.metalDark)
+      break
+    case 'terminal': {
+      // 서버실 콘솔: 금속 책상 + 검은 화면(초록 글자) + 키보드
+      g.rect(x, y + 4, w, h - 6).fill(C.metalDark)
+      g.rect(x, y + h - 3, w, 1).fill(C.dark)
+      g.rect(x + 1, y + h - 2, 2, 2).fill(C.dark)
+      g.rect(x + w - 3, y + h - 2, 2, 2).fill(C.dark)
+      const mx = x + 4
+      g.rect(mx, y - 8, 14, 11).fill(C.outline)
+      g.rect(mx + 1, y - 7, 12, 8).fill(0x0b1a10)
+      g.rect(mx + 2, y - 6, 5, 1).fill(C.green)
+      g.rect(mx + 2, y - 4, 8, 1).fill(C.green)
+      g.rect(mx + 2, y - 2, 3, 1).fill(C.green)
+      g.rect(mx + 6, y + 3, 2, 1).fill(C.outline)
+      g.rect(x + 20, y - 6, 9, 8).fill(C.outline)
+      g.rect(x + 21, y - 5, 7, 5).fill(C.screen)
+      g.rect(x + 6, y + 6, 12, 3).fill(C.dark)
+      break
+    }
+    case 'cables':
+      // 바닥을 기는 케이블 묶음(랙 → 터미널, 랙 → 옆 랙). 2px 굵기
+      g.rect(x + 4, y, 2, 11).fill(C.cable)
+      g.rect(x - 14, y + 9, 20, 2).fill(C.cable)
+      g.rect(x + 22, y, 2, 15).fill(C.blue)
+      g.rect(x + 22, y + 13, 34, 2).fill(C.blue)
+      g.rect(x + 54, y + 13, 2, 6).fill(C.blue)
+      g.rect(x + 38, y, 2, 6).fill(C.yellow)
+      g.rect(x + 38, y + 5, 18, 2).fill(C.yellow)
+      g.rect(x + 12, y, 2, 30).fill(C.red)
+      g.rect(x + 12, y + 28, 20, 2).fill(C.red)
+      break
+    case 'sofa':
+      g.rect(x + 1, y - 2, w - 2, 8).fill(C.sofaDark)
+      g.rect(x + 1, y + 5, w - 2, 8).fill(C.sofa)
+      g.rect(x, y + 1, 4, 12).fill(C.sofaDark)
+      g.rect(x + w - 4, y + 1, 4, 12).fill(C.sofaDark)
+      g.rect(x + Math.floor(w / 2), y + 6, 1, 6).fill(C.sofaDark)
+      g.rect(x + 8, y - 1, 7, 5).fill(C.yellow)
       break
     case 'globe':
       g.rect(x + 7, y + 11, 2, 3).fill(C.woodDark)
@@ -246,6 +393,10 @@ function drawProp(g: Graphics, p: Prop): void {
       g.rect(x + 2, y + 5, 1, 3).fill(C.woodDark)
       break
     case 'whiteboard':
+      // 회의실 칸막이 벽에 걸린 보드 + 펜 받침(아래 타일)
+      g.rect(x + 2, y + h - 4, w - 4, 2).fill(C.metalDark)
+      g.rect(x + 6, y + h - 5, 4, 1).fill(C.red)
+      g.rect(x + 12, y + h - 5, 4, 1).fill(C.blue)
       g.rect(x + 2, y + 3, w - 4, h - 7).fill(C.metal)
       g.rect(x + 4, y + 5, w - 8, h - 11).fill(C.white)
       g.rect(x + 8, y + 9, 14, 1).fill(C.blue)
@@ -308,6 +459,7 @@ class PlaceholderCharacterView implements CharacterView {
   private readonly fx = new Graphics()
   private readonly label: HTMLDivElement
   private readonly bubble: HTMLDivElement
+  private bubbleW = 0
   private readonly onDestroy: () => void
   private readonly shirt: number
   private readonly hair: number
@@ -316,7 +468,7 @@ class PlaceholderCharacterView implements CharacterView {
   private frame = -1
   private elapsed = 0
   private mark: Mark | null = null
-  private effect: 'paper' | null = null
+  private effect: Effect | null = null
   private highlight = false
   private px = Number.NaN
   private py = Number.NaN
@@ -341,6 +493,7 @@ class PlaceholderCharacterView implements CharacterView {
 
   setScale(scale: number): void {
     this.scale = scale
+    if (!this.bubble.hidden) this.bubbleW = this.bubble.offsetWidth
     this.placeDom()
   }
 
@@ -373,6 +526,9 @@ class PlaceholderCharacterView implements CharacterView {
   setBubble(text: string | null): void {
     this.bubble.hidden = text === null
     this.bubble.textContent = text ?? ''
+    // 폭은 말풍선이 바뀔 때만 잰다(프레임마다 레이아웃을 읽지 않는다)
+    this.bubbleW = text === null ? 0 : this.bubble.offsetWidth
+    this.placeDom()
   }
 
   setLabel(text: string): void {
@@ -385,7 +541,7 @@ class PlaceholderCharacterView implements CharacterView {
     this.drawRing()
   }
 
-  setEffect(effect: 'paper' | null): void {
+  setEffect(effect: Effect | null): void {
     this.effect = effect
     this.drawFx()
   }
@@ -402,7 +558,7 @@ class PlaceholderCharacterView implements CharacterView {
     if (f !== this.frame) {
       this.frame = f
       this.redraw()
-      if (this.mark === 'question' || this.mark === 'sleep') this.drawMark()
+      if (this.mark !== null && this.mark !== 'alert') this.drawMark()
       if (this.highlight) this.drawRing()
       if (this.effect !== null) this.drawFx()
     }
@@ -421,7 +577,10 @@ class PlaceholderCharacterView implements CharacterView {
     if (Number.isNaN(this.px)) return
     const s = this.scale
     this.label.style.transform = `translate(${this.px * s}px, ${(this.py + 2) * s}px) translateX(-50%)`
-    this.bubble.style.transform = `translate(${this.px * s}px, ${(this.py - 34) * s}px) translate(-50%, -100%)`
+    // 말풍선은 캐릭터 위 가운데, 단 사무실 가장자리 밖으로 잘리지 않게 안쪽으로 민다
+    const half = this.bubbleW / 2
+    const bx = Math.min(Math.max(this.px * s, half + 2), BASE_WIDTH * s - half - 2)
+    this.bubble.style.transform = `translate(${Math.round(bx)}px, ${(this.py - 34) * s}px) translate(-50%, -100%)`
   }
 
   /** 몸 그리기. 원점 = 발끝 중앙, 16×24 프레임 영역(-8..8, -24..0) */
@@ -434,8 +593,11 @@ class PlaceholderCharacterView implements CharacterView {
     g.clear()
 
     let bob = 0
-    if (this.anim === 'search' || this.anim === 'type') bob = two
+    if (this.anim === 'search' || this.anim === 'type' || this.anim === 'pack') bob = two
     if (this.anim === 'walk') bob = two === 1 ? -1 : 0
+    // 멈칫: 첫 프레임에 움찔(위로 1px) 후 굳음, 보고: 고개 숙임
+    if (this.anim === 'flinch') bob = f === 0 ? -1 : 0
+    if (this.anim === 'report') bob = two
     const sy = (seated ? 3 : 0) + bob // 앉으면 3px 아래
     const headTilt = this.anim === 'sleep' ? 1 : this.anim === 'look' && two ? -1 : 0
 
@@ -520,6 +682,32 @@ class PlaceholderCharacterView implements CharacterView {
         g.rect(-6, -10 + sy, 2, 3).fill(C.skin)
         g.rect(4, -10 + sy - two, 2, 3).fill(C.skin)
         break
+      case 'flinch':
+        // 양팔을 몸에 붙이고 어깨를 움츠림
+        g.rect(-6, -15 + sy, 1, 5).fill(C.outline)
+        g.rect(5, -15 + sy, 1, 5).fill(C.outline)
+        g.rect(-6, -10 + sy, 2, 2).fill(C.skin)
+        g.rect(4, -10 + sy, 2, 2).fill(C.skin)
+        break
+      case 'head_hold':
+        // 두 손으로 머리를 감싸 쥠(좌우로 흔들)
+        g.rect(-7 + two, -22 + sy, 2, 8).fill(C.outline)
+        g.rect(5 + two, -22 + sy, 2, 8).fill(C.outline)
+        g.rect(-7 + two, -23 + sy, 2, 2).fill(C.skin)
+        g.rect(5 + two, -23 + sy, 2, 2).fill(C.skin)
+        break
+      case 'pack':
+        // 책상 위 물건을 가방에 담음
+        g.rect(-7, -9 + sy, 6, 6).fill(C.bag)
+        g.rect(-6, -11 + sy, 4, 2).fill(C.woodDark)
+        g.rect(1, -11 + sy - two * 2, 3, 2).fill(C.white)
+        arm(4, -14, 5)
+        break
+      case 'report':
+        arm(-5, -14, 6)
+        g.rect(3, -13 + sy, 4, 5).fill(C.white)
+        g.rect(4, -12 + sy, 2, 1).fill(C.metalDark)
+        break
       default:
         arm(-5, -14, 6)
         arm(4, -14, 6)
@@ -532,21 +720,48 @@ class PlaceholderCharacterView implements CharacterView {
     g.clear()
     const m = this.mark
     if (m === null) return
-    const blinkOff = Math.max(this.frame, 0) % 4 >= 3
+    const f = Math.max(this.frame, 0)
+    const blinkOff = f % 4 >= 3
     const top = -34
     if (m === 'sleep') {
-      const f = Math.max(this.frame, 0) % 6
-      drawGlyph(g, 'Z', 4, top + 4 - Math.floor(f / 2), C.zzz)
-      if (f >= 2) drawGlyph(g, 'Z', 8, top - 1 - Math.floor(f / 3), C.zzz)
+      const z = f % 6
+      drawGlyph(g, 'Z', 4, top + 4 - Math.floor(z / 2), C.zzz)
+      if (z >= 2) drawGlyph(g, 'Z', 8, top - 1 - Math.floor(z / 3), C.zzz)
+      return
+    }
+    if (m === 'sweat' || m === 'sweat_heavy') {
+      // 식은땀: 이마 옆에서 맺혀 뺨을 타고 떨어지는 물방울. 무거우면 3방울 + 이마의 땀 줄
+      const drops =
+        m === 'sweat'
+          ? [
+              { x: 4, phase: 0 },
+              { x: -6, phase: 3 },
+            ]
+          : [
+              { x: 4, phase: 0 },
+              { x: -6, phase: 2 },
+              { x: 6, phase: 4 },
+            ]
+      for (const d of drops) {
+        const p = (f + d.phase) % 6 // 0..5: 맺힘 → 떨어짐
+        const y = -22 + p * 2
+        g.rect(d.x, y, 1, 1).fill(C.sweatLight)
+        g.rect(d.x - (p >= 1 ? 1 : 0), y + 1, p >= 1 ? 2 : 1, 2).fill(C.sweat)
+        if (p >= 2) g.rect(d.x - 1, y + 3, 2, 1).fill(C.outline)
+      }
+      if (m === 'sweat_heavy') {
+        g.rect(-3, -24, 1, 2).fill(C.sweat)
+        g.rect(0, -25, 1, 2).fill(C.sweat)
+        g.rect(3, -24, 1, 2).fill(C.sweat)
+      }
       return
     }
     if (m === 'question' && blinkOff) return
-    const bg = m === 'error' ? C.red : m === 'alert' ? C.yellow : C.white
-    const fg = m === 'error' ? C.white : C.outline
+    const bg = m === 'alert' ? C.yellow : C.white
     g.rect(-4, top - 1, 9, 9).fill(C.outline)
     g.rect(-3, top, 7, 7).fill(bg)
     g.rect(0, top + 8, 1, 1).fill(C.outline)
-    drawGlyph(g, m === 'question' ? '?' : '!', -1, top + 1, fg)
+    drawGlyph(g, m === 'question' ? '?' : '!', -1, top + 1, C.outline)
   }
 
   private drawRing(): void {
@@ -563,9 +778,39 @@ class PlaceholderCharacterView implements CharacterView {
   private drawFx(): void {
     const g = this.fx
     g.clear()
-    if (this.effect !== 'paper') return
-    // 책상 옆에 종이가 쌓인다 (최대 5장)
-    const n = 1 + ((Math.max(this.frame, 0) % 10) >> 1)
-    for (let i = 0; i < n; i++) g.rect(7, -12 - i * 2, 5, 2).fill(i % 2 ? C.white : C.glassLight)
+    const f = Math.max(this.frame, 0)
+    switch (this.effect) {
+      case 'paper': {
+        // 책상 옆에 종이가 쌓인다 (최대 5장)
+        const n = 1 + ((f % 10) >> 1)
+        for (let i = 0; i < n; i++)
+          g.rect(7, -12 - i * 2, 5, 2).fill(i % 2 ? C.white : C.glassLight)
+        break
+      }
+      case 'steam': {
+        // 손에 든 컵 위로 김이 피어오름
+        const k = f % 4
+        g.rect(5, -17 - k, 1, 2).fill(C.steam)
+        g.rect(6 + (k % 2), -20 - k, 1, 2).fill(C.steam)
+        if (k >= 2) g.rect(5, -23 - k + 2, 1, 1).fill(C.steam)
+        break
+      }
+      case 'shreds': {
+        // 파쇄기 아래로 떨어지는 종이 조각
+        for (let i = 0; i < 4; i++) {
+          const p = (f + i * 2) % 6
+          g.rect(-12 + (i % 2) * 3, -8 + p * 2, 1, 2).fill(i % 2 ? C.white : C.glassLight)
+        }
+        break
+      }
+      case 'bag':
+        // 퇴근 가방
+        g.rect(5, -11, 6, 6).fill(C.bag)
+        g.rect(6, -13, 4, 2).fill(C.woodDark)
+        g.rect(7, -9, 2, 1).fill(C.yellow)
+        break
+      default:
+        break
+    }
   }
 }

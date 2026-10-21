@@ -1,4 +1,4 @@
-import type { AnimName, Mark } from '../activityMap'
+import type { AnimName, Effect, Mark } from '../activityMap'
 import type { Dir, Prop } from '../layout'
 
 /*
@@ -19,14 +19,14 @@ export interface CharacterView {
   setPosition(x: number, y: number): void
   /** 애니메이션 이름은 activity-mapping.md 의 목록과 같은 문자열. 방향 무관 행동은 dir 무시 */
   setAnimation(anim: AnimName, dir: Dir): void
-  /** 머리 위 표시 ("!", "?", 빨간 "!", Zzz). null 이면 숨김 */
+  /** 머리 위 표시 ("!", "?", Zzz, 식은땀). null 이면 숨김 */
   setMark(mark: Mark | null): void
   /** 말풍선 텍스트(target 표시). null 이면 숨김 */
   setBubble(text: string | null): void
   setLabel(text: string): void
   setHighlight(on: boolean): void
-  /** 행동 중 이펙트(write 의 종이 쌓임) */
-  setEffect(effect: 'paper' | null): void
+  /** 행동 중 이펙트(종이 쌓임·김 나는 컵·종이 조각·퇴근 가방) */
+  setEffect(effect: Effect | null): void
   /** 등장·퇴장 페이드 (0..1) */
   setAlpha(a: number): void
   /** 프레임 진행. 경과 ms */
@@ -39,6 +39,8 @@ export interface SceneRenderer {
   drawRoom(props: readonly Prop[]): void
   createCharacter(variant: number): CharacterView
   setLights(on: boolean): void
+  /** 서버실 LED: busy 면 빠르게 깜빡임(명령 실행 중) */
+  setServerBusy(busy: boolean): void
   /** 매 프레임 호출(조명 전환 등 전역 애니메이션) */
   tick(dtMs: number): void
   /** 정수 배율이 바뀌었을 때(오버레이 DOM 위치 계산용) */

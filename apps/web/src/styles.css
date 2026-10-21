@@ -286,3 +286,23 @@ body {
     max-height: 45%;
   }
 }
+
+.lang-toggle {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  border: 2px solid #0b0d1a;
+}
+.lang-btn {
+  padding: 2px 8px;
+  font: 600 12px var(--pixel-font);
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 0;
+  cursor: pointer;
+}
+.lang-btn.selected {
+  color: var(--bg);
+  background: var(--accent);
+}

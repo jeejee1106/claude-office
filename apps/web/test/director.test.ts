@@ -5,7 +5,12 @@ import {
   reduce,
 } from '@claude-office/shared'
 import { describe, expect, it } from 'vitest'
-import type { CharacterCommand, DirectorOutput } from '../src/scene/commands'
+import { LINES } from '../src/i18n'
+import {
+  type CharacterCommand,
+  type DirectorOutput,
+  isCharacterCommand,
+} from '../src/scene/commands'
 import { Director } from '../src/scene/director'
 import { MAIN_VARIANT, VARIANT_COUNT, variantFor } from '../src/scene/variant'
 import { ev, loadSampleSession } from './helpers'
@@ -22,7 +27,7 @@ function run(events: OfficeEvent[], director = new Director({ now: () => 0 })) {
 }
 
 const charCmds = (all: DirectorOutput[], agentId: string) =>
-  all.filter((c): c is CharacterCommand => c.type !== 'lights' && c.agentId === agentId)
+  all.filter((c): c is CharacterCommand => isCharacterCommand(c) && c.agentId === agentId)
 
 describe('director × fixtures/sample-session.jsonl', () => {
   const events = loadSampleSession()
@@ -47,7 +52,7 @@ describe('director × fixtures/sample-session.jsonl', () => {
       'whiteboard',
       'door',
       'mainDesk',
-      'serverRack',
+      'serverTerminal',
       'globe',
       'phone',
       'coffee',
@@ -59,6 +64,11 @@ describe('director × fixtures/sample-session.jsonl', () => {
     const between = charCmds(all, 'main').filter(
       (c) => c.type === 'moveTo' && kindOf.get(c.cause) === 'tool.end',
     )
+    // 도구 사이에는 moveTo(soft) 외에 오류 반응(act)만 낀다
+    const other = charCmds(all, 'main').filter(
+      (c) => kindOf.get(c.cause) === 'tool.end' && c.type !== 'moveTo' && c.type !== 'mark',
+    )
+    expect(other.map((c) => [c.cause, c.type])).toEqual([['e21', 'act']])
     expect(between.length).toBeGreaterThan(0)
     for (const c of between) {
       expect(c).toMatchObject({ spot: 'mainDesk', anim: 'idle_sit', soft: true })
@@ -68,8 +78,9 @@ describe('director × fixtures/sample-session.jsonl', () => {
   it('메인: 문에서 등장해 자기 책상으로, 마지막에 퇴장', () => {
     const main = charCmds(all, 'main')
     expect(main[0]).toMatchObject({ type: 'spawn', cause: 'e01', variant: MAIN_VARIANT })
+    expect(LINES.ko.sessionStart).toContain((main[0] as { say?: string }).say)
     expect(main[1]).toMatchObject({ type: 'moveTo', spot: 'mainDesk', cause: 'e01' })
-    expect(main.at(-1)).toMatchObject({ type: 'leave', cause: 'e29' })
+    expect(main.at(-1)).toMatchObject({ type: 'leave', cause: 'e29', style: 'pack' })
   })
 
   it('sub-a: 문에서 등장 → 캐비닛 → 책장 → 문(퇴장)', () => {
@@ -100,23 +111,70 @@ describe('director × fixtures/sample-session.jsonl', () => {
     expect(e20[0]).toMatchObject({ type: 'mark', mark: null })
   })
 
-  it('e21 Bash 오류 → 빨간 "!" 1초 후 자기 책상', () => {
+  it('e21 Bash 오류 → 그 자리에서 멈칫 + "앗…" + 식은땀, 그 뒤 자기 책상(soft)', () => {
     const e21 = out.find((o) => o.event.id === 'e21')?.cmds ?? []
-    expect(e21[0]).toMatchObject({ type: 'mark', mark: 'error', durationMs: 1000 })
-    expect(e21.at(-1)).toMatchObject({ type: 'moveTo', spot: 'mainDesk', anim: 'idle_sit' })
+    expect(e21[0]).toMatchObject({ type: 'mark', mark: 'sweat', durationMs: 1200 })
+    expect(e21[1]).toMatchObject({
+      type: 'act',
+      anim: 'flinch',
+      durationMs: 1200,
+      interruptible: true,
+    })
+    expect(LINES.ko.error).toContain((e21[1] as { say?: string }).say)
+    // 빨간 "!" 는 더 이상 쓰지 않는다(기획서 5절 표: 식은땀·"앗…" 으로 대체)
+    expect(all.some((c) => c.type === 'mark' && (c.mark as string) === 'error')).toBe(false)
+    expect(e21.filter((c) => c.type !== 'servers').at(-1)).toMatchObject({
+      type: 'moveTo',
+      spot: 'mainDesk',
+      anim: 'idle_sit',
+      soft: true,
+    })
   })
 
-  it('e02 prompt.submit → "!" 0.8초', () => {
+  it('e02 prompt.submit → 자리에서 일어나 "네, 알겠습니다!" + "!" 0.8초', () => {
     const e02 = out.find((o) => o.event.id === 'e02')?.cmds ?? []
-    expect(e02).toEqual([expect.objectContaining({ type: 'mark', mark: 'alert', durationMs: 800 })])
+    expect(e02).toEqual([
+      expect.objectContaining({ type: 'act', anim: 'idle_stand', interruptible: true }),
+      expect.objectContaining({ type: 'moveTo', spot: 'mainDesk', soft: true }),
+      expect.objectContaining({ type: 'mark', mark: 'alert', durationMs: 800 }),
+    ])
+    expect(LINES.ko.promptSubmit).toContain((e02[0] as { say?: string }).say)
   })
 
-  it('조명: session.start 에 켜지고 session.end 에 꺼진다', () => {
+  it('조명: session.start 에 켜지고 session.end 에 꺼진다(끄기는 Roster 가 마지막 퇴장까지 미룸)', () => {
     const lights = all.filter((c) => c.type === 'lights')
     expect(lights).toEqual([
       { type: 'lights', on: true, cause: 'e01' },
       { type: 'lights', on: false, cause: 'e29' },
     ])
+  })
+
+  it('서버실 LED: bash 실행(e20) 동안만 busy', () => {
+    const servers = all.filter((c) => c.type === 'servers')
+    expect(servers).toEqual([
+      { type: 'servers', busy: true, cause: 'e20' },
+      { type: 'servers', busy: false, cause: 'e21' },
+    ])
+  })
+
+  it('session.end: 퇴근 대사 + 짐 챙기기(pack) 퇴장', () => {
+    const e29 = out.find((o) => o.event.id === 'e29')?.cmds ?? []
+    const leave = e29.find((c) => c.type === 'leave')
+    expect(leave).toMatchObject({ type: 'leave', agentId: 'main', style: 'pack' })
+    expect(LINES.ko.sessionEnd).toContain((leave as { say?: string }).say)
+  })
+
+  it('대사 상황: 입장·완료·턴 끝·확인 필요·정리', () => {
+    const say = (id: string, type: string) =>
+      (out.find((o) => o.event.id === id)?.cmds ?? []).find(
+        (c) => c.type === type && 'say' in c && c.say,
+      ) as { say?: string; style?: string } | undefined
+    expect(LINES.ko.subSpawn).toContain(say('e10', 'spawn')?.say)
+    expect(LINES.ko.subFinish).toContain(say('e15', 'leave')?.say)
+    expect(say('e15', 'leave')?.style).toBe('report')
+    expect(LINES.ko.attention).toContain(say('e19', 'act')?.say)
+    expect(LINES.ko.turnEnd).toContain(say('e27', 'moveTo')?.say)
+    expect(LINES.ko.compact).toContain(say('e28', 'moveTo')?.say)
   })
 
   it('마지막에 화면에 아무도 없고, 상태와 일치한다', () => {
@@ -227,7 +285,7 @@ describe('director 시나리오', () => {
       expect.objectContaining({
         type: 'place',
         agentId: 'main',
-        spot: 'serverRack',
+        spot: 'serverTerminal',
         anim: 'type',
         bubble: '>_ git',
       }),
@@ -250,6 +308,43 @@ describe('director 시나리오', () => {
     expect(off.filter((c) => c.type === 'place')).toEqual([])
     expect(off).toContainEqual({ type: 'lights', on: false, cause: 'sync' })
     expect(d.syncAll(ended, null)).toContainEqual({ type: 'lights', on: false, cause: 'sync' })
+  })
+
+  it('연속 에러 3회 이상: 머리 감싸기 + "이상하다…" + 땀 증가, ok 가 오면 다시 1회부터', () => {
+    const bash = { name: 'Bash', category: 'bash', useId: 'u' }
+    const fail = () => ev({ kind: 'tool.end', tool: bash, status: 'error' })
+    const ok = () => ev({ kind: 'tool.end', tool: bash, status: 'ok' })
+    const { out } = run([
+      ev({ kind: 'session.start' }),
+      fail(),
+      fail(),
+      fail(),
+      fail(),
+      ok(),
+      fail(),
+    ])
+    const reaction = (i: number) => {
+      const cmds = out[i]?.cmds ?? []
+      const act = cmds.find((c) => c.type === 'act') as { anim?: string; say?: string } | undefined
+      const mark = cmds.find((c) => c.type === 'mark') as { mark?: string } | undefined
+      return [act?.anim, mark?.mark]
+    }
+    expect([1, 2, 3, 4, 6].map(reaction)).toEqual([
+      ['flinch', 'sweat'],
+      ['flinch', 'sweat'],
+      ['head_hold', 'sweat_heavy'],
+      ['head_hold', 'sweat_heavy'],
+      ['flinch', 'sweat'],
+    ])
+    const act3 = (out[3]?.cmds ?? []).find((c) => c.type === 'act') as { say?: string }
+    expect(LINES.ko.errorRepeated).toContain(act3.say)
+  })
+
+  it('영어 옵션: lang 이 en 이면 대사도 영어', () => {
+    const d = new Director({ now: () => 0, lang: () => 'en' })
+    const { out } = run([ev({ kind: 'session.start' })], d)
+    const spawn = out[0]?.cmds.find((c) => c.type === 'spawn') as { say?: string }
+    expect(LINES.en.sessionStart).toContain(spawn.say)
   })
 
   it('색 변형: 메인은 0 고정, 서브는 agentType 해시로 결정적(1..N-1)', () => {

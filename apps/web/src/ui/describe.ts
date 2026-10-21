@@ -1,40 +1,42 @@
 import type { OfficeEvent } from '@claude-office/shared'
+import { getLang, type Lang, t } from '../i18n'
 
 /** 타임라인 한 줄 설명 (원문이 아닌 계약 필드만 사용) */
-export function describeEvent(e: OfficeEvent): string {
+export function describeEvent(e: OfficeEvent, lang: Lang = getLang()): string {
+  const s = (k: Parameters<typeof t>[0]) => t(k, lang)
   switch (e.kind) {
     case 'session.start':
-      return `세션 시작${e.source ? ` (${e.source})` : ''}`
+      return `${s('evSessionStart')}${e.source ? ` (${e.source})` : ''}`
     case 'session.end':
-      return `세션 종료${e.reason ? ` (${e.reason})` : ''}`
+      return `${s('evSessionEnd')}${e.reason ? ` (${e.reason})` : ''}`
     case 'prompt.submit':
-      return '프롬프트 입력'
+      return s('evPrompt')
     case 'tool.start':
       return `${e.tool.name}${e.tool.target ? ` · ${e.tool.target}` : ''}`
     case 'tool.end':
-      return `${e.tool.name} ${e.status === 'error' ? '실패' : '완료'}`
+      return `${e.tool.name} ${e.status === 'error' ? s('evToolFail') : s('evToolOk')}`
     case 'agent.spawn':
-      return `서브에이전트 입장${e.agentType ? ` · ${e.agentType}` : ''}`
+      return `${s('evSpawn')}${e.agentType ? ` · ${e.agentType}` : ''}`
     case 'agent.finish':
-      return `서브에이전트 퇴장${e.status === 'error' ? ' (오류)' : ''}`
+      return `${s('evFinish')}${e.status === 'error' ? s('evFinishErr') : ''}`
     case 'turn.end':
-      return '턴 종료'
+      return s('evTurnEnd')
     case 'attention':
-      return `확인 필요 (${e.reason})`
+      return `${s('evAttention')} (${e.reason})`
     case 'context.compact':
-      return `컨텍스트 정리${e.trigger ? ` (${e.trigger})` : ''}`
+      return `${s('evCompact')}${e.trigger ? ` (${e.trigger})` : ''}`
     case 'agent.idle':
-      return '쉬는 중'
+      return s('evIdle')
     default: {
       const _exhaustive: never = e
       void _exhaustive
-      return '알 수 없는 이벤트'
+      return s('evUnknown')
     }
   }
 }
 
-export function formatTime(iso: string): string {
+export function formatTime(iso: string, lang: Lang = getLang()): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '--:--:--'
-  return d.toLocaleTimeString('ko-KR', { hour12: false })
+  return d.toLocaleTimeString(t('locale', lang), { hour12: false })
 }

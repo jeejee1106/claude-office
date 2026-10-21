@@ -88,7 +88,10 @@ export class OfficeScene {
     renderer.drawRoom(PROPS)
     this.roster = new Roster(
       (variant) => renderer.createCharacter(variant),
-      (on) => renderer.setLights(on),
+      (cmd) => {
+        if (cmd.type === 'lights') renderer.setLights(cmd.on)
+        else renderer.setServerBusy(cmd.busy)
+      },
     )
 
     // 리사이즈: 정수 배율

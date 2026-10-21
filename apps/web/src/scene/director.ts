@@ -6,13 +6,16 @@ import {
   type OfficeState,
   type SessionState,
 } from '@claude-office/shared'
+import { getLang, type Lang, type LineKey, pickLine } from '../i18n'
 import {
   type AnimName,
-  ERROR_MARK_MS,
+  type Effect,
+  errorReaction,
   type KindActivity,
   kindActivity,
   type Mark,
   SLEEP_ACTIVITY,
+  SPEECH_MS,
   type SpotRef,
   toolActivity,
 } from './activityMap'
@@ -35,6 +38,8 @@ import { variantFor } from './variant'
 export interface DirectorOptions {
   /** 서버 시계 기준 현재 시각(epoch ms). isAsleep 계산용 */
   now?: () => number
+  /** 대사 언어(기본: 사용자가 고른 언어) */
+  lang?: () => Lang
 }
 
 interface CharInfo {
@@ -49,6 +54,10 @@ interface CharInfo {
   /** 다음 이벤트까지 유지되는 표시(question/sleep) */
   persistentMark: Mark | null
   asleep: boolean
+  /** 사이에 ok 없이 연달아 실패한 tool.end 수(웹이 이벤트 열로 계산 — 상태에는 없다) */
+  consecutiveErrors: number
+  /** 지금 실행 중인 도구가 bash 인가(서버실 LED) */
+  bash: boolean
 }
 
 export class Director {
@@ -59,9 +68,16 @@ export class Director {
   /** 스팟별 슬롯 점유: spot → (agentId → slot) */
   private readonly occupancy = new Map<SpotId, Map<string, number>>()
   private lights = false
+  private serversBusy = false
+  private readonly lang: () => Lang
 
   constructor(opts: DirectorOptions = {}) {
     this.now = opts.now ?? Date.now
+    this.lang = opts.lang ?? getLang
+  }
+
+  serversBusyNow(): boolean {
+    return this.serversBusy
   }
 
   /** 화면에 있는(있어야 하는) 캐릭터 ID */
@@ -89,7 +105,11 @@ export class Director {
     const open = session !== undefined && session.endedAt === undefined
     this.lights = open
     out.push({ type: 'lights', on: open, cause: 'sync' })
-    if (!open || session === undefined) return out
+    if (!open || session === undefined) {
+      this.serversBusy = false
+      out.push({ type: 'servers', busy: false, cause: 'sync' })
+      return out
+    }
 
     const agents = Object.values(session.agents).filter((a) => a.activity !== 'gone')
     agents.sort((a, b) => (a.id === MAIN_AGENT_ID ? -1 : b.id === MAIN_AGENT_ID ? 1 : 0))
@@ -100,6 +120,7 @@ export class Director {
       const slot = this.occupy(info, spot)
       info.persistentMark = p.mark
       info.asleep = p.mark === 'sleep'
+      info.bash = agent.currentTool?.category === 'bash'
       out.push({
         type: 'place',
         agentId: agent.id,
@@ -113,6 +134,8 @@ export class Director {
         mark: p.mark,
       })
     }
+    this.serversBusy = [...this.chars.values()].some((c) => c.bash)
+    out.push({ type: 'servers', busy: this.serversBusy, cause: 'sync' })
     return out
   }
 
@@ -131,14 +154,15 @@ export class Director {
     }
 
     if (act.subject === 'all') {
-      // session.end: 전원 퇴장
+      // session.end: 전원 짐을 챙겨 퇴장(각자 대사)
       for (const info of this.chars.values()) {
         if (info.persistentMark !== null) out.push(this.markCmd(info, null, null, cause))
-        out.push({ type: 'leave', agentId: info.agentId, cause })
+        out.push(this.leaveCmd(info, act, cause))
       }
       this.chars.clear()
       this.deskOwner.clear()
       this.occupancy.clear()
+      this.updateServers(out, cause)
       return out
     }
 
@@ -146,8 +170,9 @@ export class Director {
       const info = this.chars.get(e.agentId)
       if (info === undefined) return out
       if (info.persistentMark !== null) out.push(this.markCmd(info, null, null, cause))
-      out.push({ type: 'leave', agentId: info.agentId, cause })
+      out.push(this.leaveCmd(info, act, cause))
       this.release(info)
+      this.updateServers(out, cause)
       return out
     }
 
@@ -166,6 +191,8 @@ export class Director {
         cause,
         variant: info.variant,
         label: info.label,
+        // 등장 대사(출근·"부르셨어요?")는 문에서 들어올 때
+        say: act.motion === 'enter' ? this.line(act.line, cause) : null,
       })
     }
 
@@ -182,6 +209,9 @@ export class Director {
     }
     info.asleep = effective === SLEEP_ACTIVITY
 
+    // 서버실 LED: 지금 bash 를 실행 중인가(이 에이전트의 다른 이벤트가 오면 끝난 것으로 본다)
+    info.bash = e.kind === 'tool.start' && e.tool.category === 'bash'
+
     switch (effective.motion) {
       case 'tool': {
         if (e.kind !== 'tool.start') break
@@ -196,20 +226,31 @@ export class Director {
       }
       case 'enter':
       case 'goto': {
-        if (e.kind === 'tool.end' && e.status === 'error') {
-          // 빨간 "!" 1초 → 자기 책상 idle
-          out.push(this.markCmd(info, 'error', ERROR_MARK_MS, cause))
-          out.push({
-            type: 'act',
-            agentId: info.agentId,
-            cause,
-            anim: 'idle_stand',
-            durationMs: ERROR_MARK_MS,
-          })
+        if (e.kind === 'tool.end') {
+          if (e.status === 'error') {
+            // 그 자리에서 멈칫 + "앗…" + 식은땀 (연속 3회 이상: 머리 감싸기 + "이상하다…" + 땀 증가)
+            info.consecutiveErrors++
+            const r = errorReaction(info.consecutiveErrors)
+            out.push(this.markCmd(info, r.mark, r.ms, cause))
+            out.push({
+              type: 'act',
+              agentId: info.agentId,
+              cause,
+              anim: r.anim,
+              durationMs: r.ms,
+              say: this.line(r.line, cause),
+              interruptible: true,
+            })
+          } else {
+            info.consecutiveErrors = 0
+          }
         }
         out.push(
           this.moveCmd(info, effective.spot ?? 'ownDesk', effective.anim ?? 'idle_sit', cause, {
             soft: effective.soft === true,
+            effect: effective.effect ?? null,
+            // enter 의 대사는 spawn 이 이미 말했다
+            say: effective.motion === 'goto' ? this.line(effective.line, cause) : null,
           }),
         )
         break
@@ -220,8 +261,14 @@ export class Director {
           agentId: info.agentId,
           cause,
           anim: effective.anim ?? 'idle_stand',
-          durationMs: null,
+          durationMs: effective.brief === true ? SPEECH_MS : null,
+          say: this.line(effective.line, cause),
+          interruptible: effective.brief === true,
         })
+        // brief: 잠깐 일어났다가 자기 책상으로(soft — 다음 도구가 오면 생략)
+        if (effective.brief === true) {
+          out.push(this.moveCmd(info, 'ownDesk', 'idle_sit', cause, { soft: true }))
+        }
         break
       case 'none':
       case 'leave':
@@ -233,6 +280,7 @@ export class Director {
       out.push(this.markCmd(info, effective.mark, ms, cause))
       if (ms === null) info.persistentMark = effective.mark
     }
+    this.updateServers(out, cause)
     return out
   }
 
@@ -287,6 +335,8 @@ export class Director {
       slot: 0,
       persistentMark: null,
       asleep: false,
+      consecutiveErrors: 0,
+      bash: false,
     }
     this.chars.set(agentId, info)
     return info
@@ -343,7 +393,7 @@ export class Director {
     ref: SpotRef,
     anim: AnimName,
     cause: string,
-    o: { bubble?: string | null; effect?: 'paper' | null; soft?: boolean },
+    o: { bubble?: string | null; effect?: Effect | null; soft?: boolean; say?: string | null },
   ): CharacterCommand {
     const spot = this.resolve(info, ref)
     const slot = this.occupy(info, spot)
@@ -357,7 +407,30 @@ export class Director {
       bubble: o.bubble ?? null,
       effect: o.effect ?? null,
       soft: o.soft ?? false,
+      say: o.say ?? null,
     }
+  }
+
+  private leaveCmd(info: CharInfo, act: KindActivity, cause: string): CharacterCommand {
+    return {
+      type: 'leave',
+      agentId: info.agentId,
+      cause,
+      say: this.line(act.line, `${cause}:${info.agentId}`),
+      style: act.leaveStyle ?? null,
+    }
+  }
+
+  /** 대사 후보 중 하나(이벤트 id 로 결정적) */
+  private line(key: LineKey | undefined, seed: string): string | null {
+    return key === undefined ? null : pickLine(key, seed, this.lang())
+  }
+
+  private updateServers(out: DirectorOutput[], cause: string): void {
+    const busy = [...this.chars.values()].some((c) => c.bash)
+    if (busy === this.serversBusy) return
+    this.serversBusy = busy
+    out.push({ type: 'servers', busy, cause })
   }
 
   private markCmd(

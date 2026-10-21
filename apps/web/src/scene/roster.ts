@@ -1,5 +1,5 @@
 import { Character } from './Character'
-import { type DirectorOutput, isCharacterCommand } from './commands'
+import { type DirectorOutput, isCharacterCommand, type SceneCommand } from './commands'
 import type { CharacterView } from './render/types'
 
 /*
@@ -8,15 +8,25 @@ import type { CharacterView } from './render/types'
  */
 export class Roster {
   private readonly createView: (variant: number) => CharacterView
-  private readonly onLights: (on: boolean) => void
+  private readonly onScene: (cmd: SceneCommand) => void
+  /** 조명 끄기 대기 중(퇴장 중인 사람이 다 나가면 끈다 — 기획서 5절 "마지막 사람이 나가면") */
+  private lightsOffPending: SceneCommand | null = null
   readonly chars = new Map<string, Character>()
   /** 퇴장 중(문으로 걷는 중)인 캐릭터 — 같은 ID 가 다시 들어와도 겹치지 않게 분리 */
   departing: Character[] = []
   private highlight: string | null = null
 
-  constructor(createView: (variant: number) => CharacterView, onLights: (on: boolean) => void) {
+  constructor(
+    createView: (variant: number) => CharacterView,
+    onScene: (cmd: SceneCommand) => void,
+  ) {
     this.createView = createView
-    this.onLights = onLights
+    this.onScene = onScene
+  }
+
+  /** 조명 끄기를 기다리는 중인가(테스트용) */
+  get lightsOffDeferred(): boolean {
+    return this.lightsOffPending !== null
   }
 
   /** 화면에 남아 있는 캐릭터 수(퇴장 중 포함) */
@@ -27,7 +37,16 @@ export class Roster {
   dispatch(outs: readonly DirectorOutput[]): void {
     for (const cmd of outs) {
       if (!isCharacterCommand(cmd)) {
-        this.onLights(cmd.on)
+        if (cmd.type === 'lights') {
+          if (cmd.on) {
+            this.lightsOffPending = null
+            this.onScene(cmd)
+          } else {
+            this.lightsOffPending = cmd
+          }
+        } else {
+          this.onScene(cmd)
+        }
         continue
       }
       let ch = this.chars.get(cmd.agentId)
@@ -58,6 +77,14 @@ export class Roster {
           ch?.enqueue(cmd)
       }
     }
+    this.flushLights()
+  }
+
+  private flushLights(): void {
+    if (this.lightsOffPending === null || this.departing.length > 0) return
+    const cmd = this.lightsOffPending
+    this.lightsOffPending = null
+    this.onScene(cmd)
   }
 
   update(dtMs: number): void {
@@ -68,12 +95,14 @@ export class Roster {
       for (const c of gone) c.destroy()
       if (gone.length > 0) this.departing = this.departing.filter((c) => !c.isGone)
     }
+    this.flushLights()
   }
 
   /** 퇴장 중 캐릭터를 즉시 제거(상태로 다시 맞출 때) */
   clearDeparting(): void {
     for (const c of this.departing) c.destroy()
     this.departing = []
+    this.flushLights()
   }
 
   setHighlight(id: string | null): void {

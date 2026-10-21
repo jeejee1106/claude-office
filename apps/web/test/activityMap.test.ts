@@ -2,12 +2,16 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { OFFICE_EVENT_KINDS, TOOL_CATEGORIES } from '@claude-office/shared'
 import { describe, expect, it } from 'vitest'
+import { LANGS, LINES, type LineKey, pickLine } from '../src/i18n'
 import {
   ANIMATIONS,
   DEFAULT_ACTIVITY,
-  ERROR_MARK_MS,
+  ERROR_REACTION,
+  ERROR_REACTION_MS,
+  errorReaction,
   KIND_ACTIVITY,
   kindActivity,
+  REPEATED_ERROR_REACTION,
   SLEEP_ACTIVITY,
   TOOL_ACTIVITY,
   toolActivity,
@@ -74,7 +78,7 @@ describe('activity-mapping.md 와 1:1', () => {
     '책장 앞': 'bookshelf',
     '자기 책상': 'ownDesk',
     '서류 캐비닛': 'cabinet',
-    '서버 랙/터미널': 'serverRack',
+    '서버실 터미널': 'serverTerminal',
     '창가 지구본': 'globe',
     '문 앞': 'door',
     화이트보드: 'whiteboard',
@@ -114,9 +118,19 @@ describe('activity-mapping.md 와 1:1', () => {
     expect(toolEnd).toContain('자기 책상')
     expect(toolEnd).toContain('`idle_sit`')
     expect(toolEnd).toContain('soft')
-    expect(toolEnd).toContain('빨간 "!" 1초')
-    expect(toolEnd).toContain('`idle_stand`')
-    expect(ERROR_MARK_MS).toBe(1000)
+    expect(toolEnd).toContain('`flinch`')
+    expect(toolEnd).toContain('`sweat`')
+    expect(toolEnd).toContain('`head_hold`')
+    expect(toolEnd).toContain('`sweat_heavy`')
+    expect(toolEnd).toContain('3회 이상')
+    expect(toolEnd).toContain('"앗…"')
+    expect(ERROR_REACTION).toMatchObject({ anim: 'flinch', mark: 'sweat', line: 'error' })
+    expect(REPEATED_ERROR_REACTION).toMatchObject({
+      anim: 'head_hold',
+      mark: 'sweat_heavy',
+      line: 'errorRepeated',
+    })
+    expect(toolEnd).toContain(`${ERROR_REACTION_MS / 1000}초`)
     const unknown = row('(모르는 kind)')
     expect(DEFAULT_ACTIVITY).toMatchObject({ spot: 'ownDesk', anim: 'idle_sit', soft: true })
     expect(kindActivity('future.kind')).toBe(DEFAULT_ACTIVITY)
@@ -127,5 +141,56 @@ describe('activity-mapping.md 와 1:1', () => {
     const section = doc.split('## 필요한 애니메이션 목록')[1] ?? ''
     const names = [...section.matchAll(/`(\w+)`/g)].map((m) => m[1])
     expect(names.sort()).toEqual([...ANIMATIONS].sort())
+  })
+})
+
+describe('대사 사전 (기획서 5·6절)', () => {
+  const SPEC_LINES: Record<LineKey, string> = {
+    sessionStart: '출근했습니다!',
+    promptSubmit: '네, 알겠습니다!',
+    subSpawn: '부르셨어요?',
+    subFinish: '다녀왔습니다!',
+    error: '앗…',
+    errorRepeated: '이상하다…',
+    attention: '확인 부탁드려요!',
+    turnEnd: '휴~',
+    compact: '정리 좀 할게요',
+    sessionEnd: '퇴근하겠습니다!',
+  }
+
+  it('한국어 첫 후보는 기획서 대사, 상황마다 후보가 여러 개, 영어 후보도 같은 수', () => {
+    for (const [k, line] of Object.entries(SPEC_LINES) as [LineKey, string][]) {
+      expect(LINES.ko[k][0], k).toBe(line)
+      expect(LINES.ko[k].length, k).toBeGreaterThanOrEqual(2)
+      expect(LINES.en[k].length, k).toBe(LINES.ko[k].length)
+    }
+    expect(Object.keys(LINES.ko).sort()).toEqual(Object.keys(SPEC_LINES).sort())
+    expect(LANGS).toEqual(['ko', 'en'])
+  })
+
+  it('후보는 이벤트 id 로 결정적으로 고르고, id 가 달라지면 다른 후보도 나온다', () => {
+    expect(pickLine('error', 'e21', 'ko')).toBe(pickLine('error', 'e21', 'ko'))
+    const seen = new Set(Array.from({ length: 40 }, (_, i) => pickLine('error', `x${i}`, 'ko')))
+    expect(seen.size).toBe(LINES.ko.error.length)
+    expect(LINES.en.error).toContain(pickLine('error', 'e21', 'en'))
+  })
+
+  it('연속 에러 3회부터 머리 감싸기 반응', () => {
+    expect(errorReaction(1)).toBe(ERROR_REACTION)
+    expect(errorReaction(2)).toBe(ERROR_REACTION)
+    expect(errorReaction(3)).toBe(REPEATED_ERROR_REACTION)
+    expect(errorReaction(7)).toBe(REPEATED_ERROR_REACTION)
+  })
+
+  it('생명주기 매핑의 대사 키', () => {
+    expect(KIND_ACTIVITY['session.start'].line).toBe('sessionStart')
+    expect(KIND_ACTIVITY['session.end']).toMatchObject({ line: 'sessionEnd', leaveStyle: 'pack' })
+    expect(KIND_ACTIVITY['agent.finish']).toMatchObject({
+      line: 'subFinish',
+      leaveStyle: 'report',
+    })
+    expect(KIND_ACTIVITY['turn.end']).toMatchObject({ spot: 'coffee', effect: 'steam' })
+    expect(KIND_ACTIVITY['context.compact']).toMatchObject({ spot: 'shredder', effect: 'shreds' })
+    expect(TOOL_ACTIVITY.bash.spot).toBe('serverTerminal')
   })
 })

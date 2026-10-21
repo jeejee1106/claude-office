@@ -34,7 +34,13 @@ function harness() {
 }
 
 const types = (out: DirectorOutput[]) =>
-  out.map((c) => (c.type === 'lights' ? `lights:${c.on}` : `${c.type}:${c.agentId}`))
+  out.map((c) =>
+    c.type === 'lights'
+      ? `lights:${c.on}`
+      : c.type === 'servers'
+        ? `servers:${c.busy}`
+        : `${c.type}:${c.agentId}`,
+  )
 
 describe('routeSceneEvent (QA B4-e)', () => {
   const events = loadSampleSession()

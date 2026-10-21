@@ -1,11 +1,14 @@
 import { useMemo } from 'react'
+import { t } from '../i18n'
 import { effectiveSessionId } from '../store/officeStore'
+import { useLang } from './LangToggle'
 import { useOfficeStore, useStoreSelector } from './useStore'
 
 const AUTO = '__auto__'
 
 export function SessionPicker() {
   const store = useOfficeStore()
+  const lang = useLang()
   const office = useStoreSelector((s) => s.office)
   const selected = useStoreSelector((s) => s.selectedSessionId)
   const effective = useStoreSelector(effectiveSessionId)
@@ -18,22 +21,23 @@ export function SessionPicker() {
     [office],
   )
 
-  if (sessions.length === 0) return <span className="session-empty">세션 없음</span>
+  if (sessions.length === 0) return <span className="session-empty">{t('noSession', lang)}</span>
 
   return (
     <label className="session-picker">
-      세션
+      {t('session', lang)}
       <select
         value={selected ?? AUTO}
         onChange={(ev) => store.selectSession(ev.target.value === AUTO ? null : ev.target.value)}
       >
         <option value={AUTO}>
-          자동 (가장 최근 활성{effective ? `: ${short(effective)}` : ''})
+          {t('auto', lang)}
+          {effective ? `: ${short(effective)}` : ''})
         </option>
         {sessions.map((s) => (
           <option key={s.id} value={s.id}>
             {s.project ?? short(s.id)} · {short(s.id)}
-            {s.endedAt ? ' (종료)' : ''}
+            {s.endedAt ? ` ${t('ended', lang)}` : ''}
           </option>
         ))}
       </select>

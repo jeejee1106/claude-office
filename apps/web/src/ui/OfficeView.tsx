@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { t } from '../i18n'
 import { OfficeScene } from '../scene/OfficeScene'
+import { useLang } from './LangToggle'
 import { useOfficeStore, useStoreSelector } from './useStore'
 
 /** PixiJS 씬을 마운트한다. 씬은 자체 ticker 로 돌고 여기서는 연결 상태(어둡게)만 반영한다 */
@@ -7,6 +9,7 @@ export function OfficeView() {
   const store = useOfficeStore()
   const host = useRef<HTMLDivElement>(null)
   const connection = useStoreSelector((s) => s.connection)
+  const lang = useLang()
 
   useEffect(() => {
     const el = host.current
@@ -19,9 +22,7 @@ export function OfficeView() {
   return (
     <section className={`office ${connection === 'open' ? '' : 'office-offline'}`}>
       <div ref={host} className="office-host" />
-      {connection !== 'open' && (
-        <div className="office-offline-banner">서버에 연결되어 있지 않습니다 — 재접속 중</div>
-      )}
+      {connection !== 'open' && <div className="office-offline-banner">{t('offline', lang)}</div>}
     </section>
   )
 }

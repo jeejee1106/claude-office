@@ -4,6 +4,7 @@ import {
   type ToolCategory,
   type ToolInfo,
 } from '@claude-office/shared'
+import type { LineKey } from '../i18n'
 import type { SpotId } from './layout'
 
 /*
@@ -29,20 +30,36 @@ export const ANIMATIONS = [
   'raise_hand',
   'shred',
   'sleep',
+  'flinch',
+  'head_hold',
+  'pack',
+  'report',
 ] as const
 export type AnimName = (typeof ANIMATIONS)[number]
+
+/** 대사 말풍선 표시 시간(기획서 6절: 도구 사용이 없는 순간에 1~2초). brief 행동도 이 시간만큼 */
+export const SPEECH_MS = 1500
 
 /** 'ownDesk' 는 director 가 에이전트별 책상(메인: mainDesk, 서브: desk1..4/commonTable)으로 푼다. */
 export type SpotRef = SpotId | 'ownDesk'
 
-/** 머리 위 표시. alert="!", question="?"(깜빡임), error=빨간 "!", sleep=Zzz */
-export type Mark = 'alert' | 'question' | 'error' | 'sleep'
+/**
+ * 머리 위 표시. alert="!", question="?"(깜빡임), sleep=Zzz,
+ * sweat=이마에서 떨어지는 식은땀 1~2방울(에러), sweat_heavy=땀 3방울(연속 에러)
+ */
+export type Mark = 'alert' | 'question' | 'sleep' | 'sweat' | 'sweat_heavy'
+
+/**
+ * 행동 중 추가 이펙트. paper=종이 쌓임(write), steam=김 나는 컵(커피), shreds=종이 조각(파쇄),
+ * bag=퇴근 가방(세션 종료 퇴장)
+ */
+export type Effect = 'paper' | 'steam' | 'shreds' | 'bag'
 
 export interface ToolActivity {
   spot: SpotRef
   anim: AnimName
   /** 행동 중 추가 이펙트 (write: 종이 쌓임) */
-  effect?: 'paper'
+  effect?: Effect
   /** 말풍선 문자열. null 이면 말풍선 없음 */
   bubble: (tool: Pick<ToolInfo, 'name' | 'target'>) => string | null
 }
@@ -60,7 +77,7 @@ export const TOOL_ACTIVITY: Readonly<Record<ToolCategory, ToolActivity>> = {
   write: { spot: 'ownDesk', anim: 'type', effect: 'paper', bubble: withTarget('🆕') },
   search: { spot: 'cabinet', anim: 'search', bubble: withTarget('🔍') },
   bash: {
-    spot: 'serverRack',
+    spot: 'serverTerminal',
     anim: 'type',
     bubble: (t) => {
       const w = firstWord(t.target)
@@ -111,6 +128,17 @@ export interface KindActivity {
   markMs?: number
   /** 사무실 조명 */
   lights?: 'on' | 'off'
+  /** 대사(말풍선) 상황 — 후보 중 하나를 이벤트 id 로 고른다(i18n.ts LINES) */
+  line?: LineKey
+  /** 도착 후 이펙트 */
+  effect?: Effect
+  /**
+   * stay 전용: 대사 시간(SPEECH_MS)만큼 그 자리에서 행동한 뒤 자기 책상으로 돌아간다(soft).
+   * 뒤에 도구 명령이 오면 바로 끊긴다(도구 말풍선 우선).
+   */
+  brief?: boolean
+  /** leave 전용: 퇴장 직전 동작. pack=짐 챙기기 + 가방 들고 나감, report=팀장 쪽을 보고 보고 */
+  leaveStyle?: 'pack' | 'report'
   /**
    * soft: 뒤에 다른 명령이 이미 큐에 있으면 건너뛰는 명령(도구 사이 "자기 책상 복귀"처럼
    * 최종 상태에는 필요하지만 재생할 가치가 낮은 이동).
@@ -119,32 +147,73 @@ export interface KindActivity {
 }
 
 export const KIND_ACTIVITY: Readonly<Record<OfficeEventKind, KindActivity>> = {
-  // 사무실 조명 켜짐, 메인 캐릭터가 문으로 등장해 자기 책상으로
+  // 사무실 조명 켜짐, 메인 캐릭터가 문으로 등장("출근했습니다!")해 자기 책상으로
   'session.start': {
     subject: 'self',
     motion: 'enter',
     spot: 'ownDesk',
     anim: 'idle_sit',
     lights: 'on',
+    line: 'sessionStart',
   },
-  // 전원 퇴장, 조명 꺼짐
-  'session.end': { subject: 'all', motion: 'leave', lights: 'off' },
-  // 메인 캐릭터 머리 위 "!" 0.8초
-  'prompt.submit': { subject: 'self', motion: 'none', mark: 'alert', markMs: 800 },
+  // 전원 짐을 챙겨("퇴근하겠습니다!") 퇴장, 마지막 사람이 나가면 조명 꺼짐(Roster 가 미룸)
+  'session.end': {
+    subject: 'all',
+    motion: 'leave',
+    lights: 'off',
+    line: 'sessionEnd',
+    leaveStyle: 'pack',
+  },
+  // 자리에서 일어남("네, 알겠습니다!") + 머리 위 "!" 0.8초
+  'prompt.submit': {
+    subject: 'self',
+    motion: 'stay',
+    anim: 'idle_stand',
+    brief: true,
+    mark: 'alert',
+    markMs: 800,
+    line: 'promptSubmit',
+  },
   // 도구 매핑표로 위임
   'tool.start': { subject: 'self', motion: 'tool' },
-  // 도구 끝: 자기 책상 복귀(soft). status:error 면 director 가 빨간 "!" 1초 후 복귀
+  // 도구 끝: 자기 책상 복귀(soft). status:error 면 director 가 ERROR_REACTION 후 복귀
   'tool.end': { subject: 'self', motion: 'goto', spot: 'ownDesk', anim: 'idle_sit', soft: true },
-  // 새 캐릭터 문에서 등장 → 배정된 책상
-  'agent.spawn': { subject: 'self', motion: 'enter', spot: 'ownDesk', anim: 'idle_sit' },
-  // 문으로 이동 후 퇴장
-  'agent.finish': { subject: 'self', motion: 'leave' },
-  // 커피머신으로 이동 후 idle_drink
-  'turn.end': { subject: 'self', motion: 'goto', spot: 'coffee', anim: 'idle_drink' },
-  // raise_hand + 깜빡이는 "?"
-  attention: { subject: 'self', motion: 'stay', anim: 'raise_hand', mark: 'question' },
-  // 파쇄기 앞 shred
-  'context.compact': { subject: 'self', motion: 'goto', spot: 'shredder', anim: 'shred' },
+  // 새 캐릭터 문에서 등장("부르셨어요?") → 배정된 책상
+  'agent.spawn': {
+    subject: 'self',
+    motion: 'enter',
+    spot: 'ownDesk',
+    anim: 'idle_sit',
+    line: 'subSpawn',
+  },
+  // 팀장 쪽을 보고 보고("다녀왔습니다!") 후 문으로 퇴장
+  'agent.finish': { subject: 'self', motion: 'leave', line: 'subFinish', leaveStyle: 'report' },
+  // 휴게실 커피머신에서 idle_drink + 김 나는 컵("휴~")
+  'turn.end': {
+    subject: 'self',
+    motion: 'goto',
+    spot: 'coffee',
+    anim: 'idle_drink',
+    effect: 'steam',
+    line: 'turnEnd',
+  },
+  // raise_hand + 깜빡이는 "?" ("확인 부탁드려요!")
+  attention: {
+    subject: 'self',
+    motion: 'stay',
+    anim: 'raise_hand',
+    mark: 'question',
+    line: 'attention',
+  },
+  // 자료실 파쇄기 앞 shred + 종이 조각("정리 좀 할게요")
+  'context.compact': {
+    subject: 'self',
+    motion: 'goto',
+    spot: 'shredder',
+    anim: 'shred',
+    effect: 'shreds',
+    line: 'compact',
+  },
   // 자기 책상 idle_sit, isAsleep 이면 sleep(Zzz) — director 가 SLEEP_ACTIVITY 로 바꾼다
   'agent.idle': { subject: 'self', motion: 'goto', spot: 'ownDesk', anim: 'idle_sit' },
 }
@@ -158,8 +227,38 @@ export const SLEEP_ACTIVITY: KindActivity = {
   mark: 'sleep',
 }
 
-/** tool.end status:error 표시 */
-export const ERROR_MARK_MS = 1000
+/**
+ * tool.end status:error 반응 (기획서 5절 "에러 발생" / "에러 연속 3회 이상").
+ * 그 자리에서 anim(멈칫 / 머리 감싸기) + 대사 + 식은땀(mark) 를 ms 동안. 그 뒤 자기 책상(soft).
+ * 뒤에 도구 명령이 오면 행동·대사는 바로 끊기고(도구 말풍선 우선) 땀 표시는 ms 동안 남는다.
+ */
+export interface ErrorReaction {
+  anim: AnimName
+  mark: Mark
+  line: LineKey
+  ms: number
+}
+
+export const ERROR_REACTION_MS = 1200
+/** 같은 캐릭터의 tool.end error 가 연속(사이에 ok 없이) 이 횟수 이상이면 REPEATED */
+export const REPEATED_ERROR_THRESHOLD = 3
+
+export const ERROR_REACTION: ErrorReaction = {
+  anim: 'flinch',
+  mark: 'sweat',
+  line: 'error',
+  ms: ERROR_REACTION_MS,
+}
+export const REPEATED_ERROR_REACTION: ErrorReaction = {
+  anim: 'head_hold',
+  mark: 'sweat_heavy',
+  line: 'errorRepeated',
+  ms: ERROR_REACTION_MS,
+}
+
+export function errorReaction(consecutiveErrors: number): ErrorReaction {
+  return consecutiveErrors >= REPEATED_ERROR_THRESHOLD ? REPEATED_ERROR_REACTION : ERROR_REACTION
+}
 
 /** 모르는 kind 의 기본: 자기 책상 idle_sit */
 export const DEFAULT_ACTIVITY: KindActivity = {

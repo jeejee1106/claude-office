@@ -1,7 +1,8 @@
 import { createInitialState, type OfficeEvent, type SessionState } from '@claude-office/shared'
 import { describe, expect, it } from 'vitest'
+import { allLines, LINES } from '../src/i18n'
 import type { AnimName, Mark } from '../src/scene/activityMap'
-import { toolActivity } from '../src/scene/activityMap'
+import { ERROR_REACTION_MS, SPEECH_MS, toolActivity } from '../src/scene/activityMap'
 import { isCharacterCommand } from '../src/scene/commands'
 import { Director } from '../src/scene/director'
 import type { CharacterView } from '../src/scene/render/types'
@@ -17,8 +18,14 @@ import { loadSampleSession } from './helpers'
 
 /** 화면이 최신 이벤트보다 뒤처져도 되는 최대 시간 */
 const LAG_BUDGET_MS = 2000
-/** 퇴장 이벤트 후 캐릭터가 사라져야 하는 시간 */
+/**
+ * 퇴장 이벤트 후 캐릭터가 사라져야 하는 시간. Character 의 퇴장 자체는 시작 후 LEAVE_MAX_MS(2초)
+ * 안에 끝나고(대사 있는 퇴장 = 준비 0.4 + 걷기 1.1 + 페이드 0.3 = 1.8초), 앞선 명령이 남아 있으면
+ * 그만큼(따라잡기 MAX_LAG_MS 1.5초 이내) 늦게 시작한다 → 3.5초. 3차 작업에서도 그대로 둔다.
+ */
 const LEAVE_BUDGET_MS = 3500
+const DIALOG = allLines()
+const FAREWELL = new Set([...LINES.ko.sessionEnd, ...LINES.en.sessionEnd])
 
 class CountingView implements CharacterView {
   mark: Mark | null = null
@@ -26,6 +33,11 @@ class CountingView implements CharacterView {
   anim: AnimName | null = null
   destroyed = false
   calls = 0
+  /** 지금 말풍선이 처음 뜬 시각(시뮬레이션 ms) */
+  bubbleSince = 0
+  /** 퇴근 대사가 떠 있던 총 시간 */
+  farewellMs = 0
+  clock: () => number = () => 0
   setPosition() {}
   setAnimation(a: AnimName) {
     if (a !== this.anim) this.calls++
@@ -37,6 +49,7 @@ class CountingView implements CharacterView {
   }
   setBubble(t: string | null) {
     this.calls++
+    if (t !== this.bubble) this.bubbleSince = this.clock()
     this.bubble = t
   }
   setLabel() {}
@@ -56,6 +69,10 @@ interface SimResult {
   frames: number
   elapsedMs: number
   spawnedMainFromDoor: boolean
+  /** 조명 꺼진 시각 / 그때 화면에 남은 캐릭터 수 */
+  lightsOffAt: number | null
+  visibleAtLightsOff: number
+  sessionEndAt: number
 }
 
 function simulate(frameMs: number): SimResult {
@@ -65,13 +82,21 @@ function simulate(frameMs: number): SimResult {
   let simNow = 0
   const director = new Director({ now: () => t0 + simNow })
   const views: CountingView[] = []
-  const roster = new Roster(
+  let lightsOffAt: number | null = null
+  let visibleAtLightsOff = -1
+  const roster: Roster = new Roster(
     () => {
       const v = new CountingView()
+      v.clock = () => simNow
       views.push(v)
       return v
     },
-    () => {},
+    (cmd) => {
+      if (cmd.type === 'lights' && !cmd.on) {
+        lightsOffAt = simNow
+        visibleAtLightsOff = roster.visibleCount
+      }
+    },
   )
   const store = createOfficeStore()
   let sessionId: string | null = null
@@ -148,9 +173,21 @@ function simulate(frameMs: number): SimResult {
         const want = agent.currentTool
           ? toolActivity(agent.currentTool.category).bubble(agent.currentTool)
           : null
-        if (ch.bubble !== want)
-          violations.push(`t=${t} ${id}: 말풍선 ${ch.bubble} ≠ 서버 현재 도구 ${want}`)
+        // 도구 말풍선이 우선: 서버에 도구가 있으면 반드시 그 말풍선, 없으면 비었거나 대사(기획서 6절)
+        const ok =
+          ch.bubble === want || (want === null && ch.bubble !== null && DIALOG.has(ch.bubble))
+        if (!ok) violations.push(`t=${t} ${id}: 말풍선 ${ch.bubble} ≠ 서버 현재 도구 ${want}`)
       }
+    }
+    // 대사는 1~2초만(퇴장 대사는 사라질 때까지)
+    for (const v of views) {
+      if (v.destroyed || v.bubble === null || !DIALOG.has(v.bubble)) continue
+      if (FAREWELL.has(v.bubble) || LINES.ko.subFinish.includes(v.bubble)) {
+        if (FAREWELL.has(v.bubble)) v.farewellMs += frameMs
+        continue
+      }
+      if (t - v.bubbleSince > SPEECH_MS + frameMs)
+        violations.push(`t=${t}: 대사 "${v.bubble}" 가 ${t - v.bubbleSince}ms 째 떠 있음`)
     }
     // 표시 아이콘 수명
     for (const v of views) {
@@ -160,12 +197,12 @@ function simulate(frameMs: number): SimResult {
         if (p === undefined || t - at(p) > 800 + frameMs)
           violations.push(`t=${t}: "!" 가 prompt.submit 후 0.8초 넘게 남아 있음`)
       }
-      if (v.mark === 'error') {
+      if (v.mark === 'sweat' || v.mark === 'sweat_heavy') {
         const p = events
           .filter((e) => e.kind === 'tool.end' && e.status === 'error' && at(e) <= t)
           .at(-1)
-        if (p === undefined || t - at(p) > 1000 + frameMs)
-          violations.push(`t=${t}: 빨간 "!" 가 1초 넘게 남아 있음`)
+        if (p === undefined || t - at(p) > ERROR_REACTION_MS + frameMs)
+          violations.push(`t=${t}: 식은땀이 ${ERROR_REACTION_MS}ms 넘게 남아 있음`)
       }
     }
   }
@@ -176,6 +213,9 @@ function simulate(frameMs: number): SimResult {
     frames,
     elapsedMs: performance.now() - started,
     spawnedMainFromDoor,
+    lightsOffAt,
+    visibleAtLightsOff,
+    sessionEndAt: endAt,
   }
 }
 
@@ -193,6 +233,16 @@ describe('1배속 샘플 세션 시뮬레이션 (씬 = 서버 상태의 투영)'
 
       it(`어느 시점에도 최신 이벤트보다 ${LAG_BUDGET_MS}ms 넘게 뒤처지지 않고, 말풍선·표시가 서버 상태와 일치`, () => {
         expect(r.violations.slice(0, 10)).toEqual([])
+      })
+
+      it('session.end: 퇴근 대사가 퇴장 동안 보이고, 마지막 사람이 나간 뒤 조명이 꺼진다', () => {
+        const main = r.views[0]
+        // 60fps: 준비 0.4 + 걷기 1.1 + 페이드 0.3 ≈ 1.8초 / 1fps: 퇴장 시작 프레임부터 사라질 때까지
+        expect(main?.farewellMs ?? 0).toBeGreaterThanOrEqual(frameMs >= 1000 ? 1000 : 1500)
+        expect(r.lightsOffAt).not.toBeNull()
+        expect(r.visibleAtLightsOff).toBe(0)
+        expect((r.lightsOffAt ?? 0) - r.sessionEndAt).toBeGreaterThan(0)
+        expect((r.lightsOffAt ?? 0) - r.sessionEndAt).toBeLessThanOrEqual(LEAVE_BUDGET_MS)
       })
 
       it('session.end 후 캐릭터 0명, 모든 뷰 제거', () => {

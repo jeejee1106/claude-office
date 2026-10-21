@@ -1,4 +1,4 @@
-import type { AnimName, Mark } from './activityMap'
+import { type AnimName, type Mark, SPEECH_MS } from './activityMap'
 import { CommandQueue, type QueuedCommand } from './commandQueue'
 import type { CharacterCommand } from './commands'
 import {
@@ -49,7 +49,19 @@ export const MAX_LAG_MS = 1500
 export const LEAVE_MAX_MS = 2000
 /** 도착 후 다음 명령으로 넘어가기 전 최소 머무는 시간 — 행동이 한 번은 보이도록 */
 export const MIN_DWELL_MS = 350
-const FADE_MS = 300
+/**
+ * style 있는 퇴장(세션 종료 "퇴근하겠습니다!", 서브 완료 "다녀왔습니다!"):
+ * 준비 동작 LEAVE_PREP_MS → 정해진 시간 LEAVE_WALK_MS 동안 걸어 나감 → 페이드 FADE_MS.
+ * 합계 1.8초 < LEAVE_MAX_MS(2초). 대사는 퇴장 내내(약 1.5초 이상) 보인다.
+ */
+export const LEAVE_PREP_MS = 400
+/**
+ * 대사를 띄우는 제자리 행동(멈칫·잠깐 일어남)이 뒤에 도구 명령이 와서 끊기기 전 최소 시간.
+ * 도구 말풍선 우선(기획서 6절)이지만 "앗…" 이 읽히기는 해야 한다 — 도구 말풍선 지연은 이만큼(<2초 예산).
+ */
+export const DIALOG_MIN_MS = 600
+export const LEAVE_WALK_MS = 1100
+export const FADE_MS = 300
 /** update 한 번에 진행하는 최대 시간 조각 */
 const STEP_MS = 50
 
@@ -82,6 +94,13 @@ export class Character {
   private walkSpeed = WALK_SPEED
   private leaveDeadline = Number.POSITIVE_INFINITY
   private bubbleText: string | null = null
+  /** 지금 말풍선이 대사인가(도구 말풍선이 아니라) — 대사는 speechMs 뒤 사라진다 */
+  private speech = false
+  private speechMs = 0
+  /** 현재 act 가 진행된 시간(끊을 수 있는 act 용) */
+  private actMs = 0
+  /** style 있는 leave 의 단계 */
+  private leavePhase: 'prep' | 'walk' | 'fade' | null = null
   private _lastCause: string | null = null
 
   constructor(agentId: string, view: CharacterView) {
@@ -146,6 +165,7 @@ export class Character {
     this.clock += dtMs
     this.updateMark(dtMs)
     this.updateFade(dtMs)
+    this.updateSpeech(dtMs)
 
     if (this.state === 'leaving' && this.clock >= this.leaveDeadline) {
       this.state = 'gone'
@@ -164,6 +184,17 @@ export class Character {
       this.walk(dtMs)
     } else if (this.waitMs > 0) {
       this.waitMs -= dtMs
+      if (this.current?.type === 'act') {
+        this.actMs += dtMs
+        // 대사 행동(멈칫·잠깐 일어남)은 뒤에 진짜 명령이 오면 끊는다 — 도구 말풍선 우선
+        if (
+          this.current.interruptible === true &&
+          this.actMs >= DIALOG_MIN_MS &&
+          this.queue.peekAll().some((c) => !(c.type === 'moveTo' && c.soft))
+        ) {
+          this.waitMs = 0
+        }
+      }
     }
 
     // 현재 명령이 끝났으면 다음 명령
@@ -228,6 +259,7 @@ export class Character {
         this.state = 'spawning'
         this.view.setLabel(cmd.label)
         this.view.setAnimation('walk', 'up')
+        if (cmd.say) this.say(cmd.say, SPEECH_MS)
         this.fade = 0
         this.fadeDir = 1
         this.view.setAlpha(0)
@@ -239,6 +271,7 @@ export class Character {
         this.y = p.y
         this.dir = SPOTS[cmd.spot].face
         this.view.setLabel(cmd.label)
+        this.speech = false
         this.setBubble(cmd.bubble)
         this.view.setEffect(null)
         this.view.setAnimation(cmd.anim, this.dir)
@@ -253,25 +286,38 @@ export class Character {
         break
       }
       case 'moveTo': {
-        this.setBubble(cmd.bubble)
+        this.showTool(cmd.bubble)
         this.view.setEffect(null)
         this.setPathTo(SPOTS[cmd.spot].tile, spotPosition(cmd.spot, cmd.slot))
         this.state = 'walking'
         break
       }
       case 'act':
-        // 제자리 행동(오류 직후·손 들기) 중에는 진행 중인 도구가 없다 → 말풍선 끔
-        this.setBubble(null)
+        // 제자리 행동(오류 직후·손 들기) 중에는 진행 중인 도구가 없다 → 도구 말풍선 끔
+        this.showTool(null)
+        if (cmd.say) this.say(cmd.say, SPEECH_MS)
+        this.view.setEffect(null)
         this.view.setAnimation(cmd.anim, this.dir)
         this.state = IDLE_ANIMS.has(cmd.anim) ? 'idle' : 'acting'
         this.waitMs = cmd.durationMs ?? 0
+        this.actMs = 0
         break
       case 'leave':
-        this.setBubble(null)
+        this.showTool(null)
+        // 퇴장 대사는 사라질 때까지 유지
+        if (cmd.say) this.say(cmd.say, null)
         this.view.setEffect(null)
-        this.setPathTo(DOOR_OUTSIDE, tileFoot(DOOR_OUTSIDE))
         this.state = 'leaving'
         this.leaveDeadline = this.clock + LEAVE_MAX_MS
+        if (cmd.style === 'pack' || cmd.style === 'report') {
+          this.leavePhase = 'prep'
+          if (cmd.style === 'report') this.dir = this.dirToward(SPOTS.mainDesk.tile)
+          this.view.setAnimation(cmd.style, this.dir)
+          this.waitMs = LEAVE_PREP_MS
+        } else {
+          this.leavePhase = null
+          this.setPathTo(DOOR_OUTSIDE, tileFoot(DOOR_OUTSIDE))
+        }
         break
       case 'remove':
         this.state = 'gone'
@@ -291,11 +337,20 @@ export class Character {
         this.dir = SPOTS[cmd.spot].face
         this.view.setAnimation(cmd.anim, this.dir)
         this.view.setEffect(cmd.effect)
+        if (cmd.say) this.say(cmd.say, SPEECH_MS)
         this.state = IDLE_ANIMS.has(cmd.anim) ? 'idle' : 'acting'
         // 다음 명령이 있으면 행동이 한 번은 보이도록 잠시 머문다
         if (this.queue.length > 0) this.waitMs = MIN_DWELL_MS
         break
       case 'leave':
+        if (this.leavePhase === 'prep') {
+          // 준비 동작 끝 → 정해진 시간 동안 문으로 (짐 챙긴 경우 가방을 들고)
+          this.leavePhase = 'walk'
+          if (cmd.style === 'pack') this.view.setEffect('bag')
+          this.setPathTo(DOOR_OUTSIDE, tileFoot(DOOR_OUTSIDE), LEAVE_WALK_MS)
+          this.current = cmd
+          return
+        }
         if (this.fadeDir === 0 && this.fade > 0) {
           this.fadeDir = -1
           this.current = cmd // 페이드 아웃 끝나면 다시 finish
@@ -308,7 +363,8 @@ export class Character {
     }
   }
 
-  private setPathTo(goalTile: TilePos, final: Point): void {
+  /** fixedMs 가 있으면 경로 길이와 무관하게 정확히 그 시간 동안 걷는다(퇴장) */
+  private setPathTo(goalTile: TilePos, final: Point, fixedMs?: number): void {
     const from: TilePos = {
       col: Math.min(Math.max(Math.floor(this.x / TILE), 0), COLS - 1),
       row: Math.min(Math.max(Math.floor(this.y / TILE), 0), ROWS - 1),
@@ -327,12 +383,49 @@ export class Character {
       px = p.x
       py = p.y
     }
-    this.walkSpeed = Math.max(WALK_SPEED, (len * 1000) / MAX_WALK_MS)
+    this.walkSpeed =
+      fixedMs !== undefined
+        ? Math.max(1, (len * 1000) / fixedMs)
+        : Math.max(WALK_SPEED, (len * 1000) / MAX_WALK_MS)
+  }
+
+  private dirToward(t: TilePos): Dir {
+    const p = tileFoot(t)
+    const dx = p.x - this.x
+    const dy = p.y - this.y
+    if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
+    return dy < 0 ? 'up' : 'down'
   }
 
   private setBubble(text: string | null): void {
     this.bubbleText = text
     this.view.setBubble(text)
+  }
+
+  /**
+   * 도구 말풍선(기획서 6절: 도구 말풍선이 대사보다 우선).
+   * text 가 있으면 대사를 즉시 대체한다. null 이면 도구 말풍선만 지우고 진행 중인 대사는 둔다.
+   */
+  private showTool(text: string | null): void {
+    if (text === null && this.speech) return
+    this.speech = false
+    this.setBubble(text)
+  }
+
+  /** 대사. 한 사람당 말풍선 하나 — 이전 말풍선을 즉시 대체. ms=null 이면 사라질 때까지 */
+  private say(text: string, ms: number | null): void {
+    this.speech = true
+    this.speechMs = ms ?? Number.POSITIVE_INFINITY
+    this.setBubble(text)
+  }
+
+  private updateSpeech(dtMs: number): void {
+    if (!this.speech) return
+    this.speechMs -= dtMs
+    if (this.speechMs <= 0) {
+      this.speech = false
+      this.setBubble(null)
+    }
   }
 
   private walk(dtMs: number): void {

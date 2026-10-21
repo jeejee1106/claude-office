@@ -1,17 +1,15 @@
 import { type AgentState, isAsleep, MAIN_AGENT_ID } from '@claude-office/shared'
 import { useEffect, useState } from 'react'
+import { type Lang, t } from '../i18n'
 import { effectiveSessionId } from '../store/officeStore'
+import { useLang } from './LangToggle'
 import { useOfficeStore, useStoreSelector } from './useStore'
 
-const ACTIVITY_LABEL: Record<AgentState['activity'], string> = {
-  idle: '대기',
-  working: '작업 중',
-  waiting: '확인 필요',
-  gone: '퇴장',
-}
+const activityLabel = (a: AgentState['activity'], lang: Lang) => t(a, lang)
 
 export function AgentList() {
   const store = useOfficeStore()
+  const lang = useLang()
   const office = useStoreSelector((s) => s.office)
   const sessionId = useStoreSelector(effectiveSessionId)
   const highlight = useStoreSelector((s) => s.highlightAgentId)
@@ -32,8 +30,10 @@ export function AgentList() {
 
   return (
     <section className="panel">
-      <h2>에이전트 {session?.project ? `· ${session.project}` : ''}</h2>
-      {agents.length === 0 && <p className="muted">아직 아무도 출근하지 않았습니다.</p>}
+      <h2>
+        {t('agents', lang)} {session?.project ? `· ${session.project}` : ''}
+      </h2>
+      {agents.length === 0 && <p className="muted">{t('nobody', lang)}</p>}
       <ul className="agents">
         {agents.map((a) => {
           const asleep = isAsleep(a, now)
@@ -48,9 +48,11 @@ export function AgentList() {
                   {a.id === MAIN_AGENT_ID ? 'main' : (a.type ?? a.id)}
                 </span>
                 <span className="agent-state">
-                  {asleep ? '잠듦 Zzz' : ACTIVITY_LABEL[a.activity]}
+                  {asleep ? t('asleep', lang) : activityLabel(a.activity, lang)}
                   {a.currentTool ? ` · ${a.currentTool.name}` : ''}
-                  {a.lastToolResult?.status === 'error' && a.activity !== 'gone' ? ' · ⚠ 오류' : ''}
+                  {a.lastToolResult?.status === 'error' && a.activity !== 'gone'
+                    ? ` · ${t('errorTag', lang)}`
+                    : ''}
                 </span>
               </button>
             </li>

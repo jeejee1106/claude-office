@@ -3,6 +3,7 @@ import { OfficeSocket } from './net/socket'
 import { createOfficeStore } from './store/officeStore'
 import { AgentList } from './ui/AgentList'
 import { ConnectionBadge } from './ui/ConnectionBadge'
+import { LangToggle } from './ui/LangToggle'
 import { OfficeView } from './ui/OfficeView'
 import { SessionPicker } from './ui/SessionPicker'
 import { Timeline } from './ui/Timeline'
@@ -26,6 +27,7 @@ export function App() {
         <header className="topbar">
           <h1>Claude Office</h1>
           <SessionPicker />
+          <LangToggle />
           <ConnectionBadge />
         </header>
         <main className="layout">
