@@ -1,0 +1,9 @@
+{
+  "_fixture_source": "docs-derived 2026-10-22 (code.claude.com/docs/en/hooks example; not captured: does not fire in claude -p)",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/Users/alice/.claude/projects/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/Users/alice/work/demo-app",
+  "hook_event_name": "Notification",
+  "message": "<redacted message>",
+  "notification_type": "idle_prompt"
+}
