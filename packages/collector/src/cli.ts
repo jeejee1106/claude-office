@@ -29,8 +29,8 @@ Usage:
   claude-office uninstall [--project | --user | --settings <file>] [--dry-run]
 
 Targets:
-  --project          ./.claude/settings.json (default; this project only)
-  --user             ~/.claude/settings.json (every Claude Code session; honors CLAUDE_CONFIG_DIR)
+  --user             ~/.claude/settings.json (default; every Claude Code session; honors CLAUDE_CONFIG_DIR)
+  --project          ./.claude/settings.json (this project only; this file is usually committed)
   --settings <file>  any settings.json path
 
 install   adds a "${HOOK_MARKER}" command hook to ${HOOK_EVENTS.length} events, keeping your other hooks.
@@ -48,11 +48,11 @@ function resolveTarget(values: { user?: boolean; project?: boolean; settings?: s
   // `pnpm --filter … exec` 등으로 실행되면 cwd 가 패키지 디렉터리가 되므로 INIT_CWD 를 우선한다.
   const cwd = process.env.INIT_CWD ?? process.cwd()
   if (values.settings !== undefined) return resolve(cwd, values.settings)
-  if (values.user) {
-    const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
-    return join(configDir, 'settings.json')
-  }
-  return join(cwd, '.claude', 'settings.json')
+  if (values.project) return join(cwd, '.claude', 'settings.json')
+  // 기본값은 전역: 한 번 설치로 어느 폴더의 Claude Code 세션이든 사무실에 보이게 하고,
+  // 커밋되는 프로젝트 settings.json 을 건드려 다른 기여자에게 훅이 퍼지는 일을 피한다.
+  const configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+  return join(configDir, 'settings.json')
 }
 
 /** 번들(dist/claude-office.js) 옆의 dist/claude-office-hook.js. 소스(tsx)에서 실행하면 ../dist 를 본다. */

@@ -167,6 +167,15 @@ describe('claude-office CLI (임시 settings.json)', () => {
     expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({})
   })
 
+  it('옵션이 없으면 기본값은 전역(HOME/.claude/settings.json)이다', () => {
+    const r = cli('install')
+    expect(r.status).toBe(0)
+    expect(existsSync(file)).toBe(true)
+    expect(ours(JSON.parse(readFileSync(file, 'utf8')) as Settings)).toBe(HOOK_EVENTS.length)
+    cli('uninstall')
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({})
+  })
+
   it('--dry-run 은 쓰지 않는다', () => {
     const r = cli('install', '--settings', file, '--dry-run')
     expect(r.status).toBe(0)

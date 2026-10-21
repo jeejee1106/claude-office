@@ -20,15 +20,16 @@ pnpm --filter @claude-office/collector build   # packages/collector/dist/ 에 �
 둘 중 하나를 고릅니다.
 
 ```bash
-# 모든 Claude Code 세션에 적용 (~/.claude/settings.json)
-node packages/collector/dist/claude-office.js install --user
+# 모든 Claude Code 세션에 적용 (~/.claude/settings.json) — 기본값, 보통 이것만 하면 됩니다
+node packages/collector/dist/claude-office.js install
 
 # 특정 프로젝트에만 적용 (그 프로젝트의 .claude/settings.json)
 cd ~/my-project
 node /path/to/claude-office/packages/collector/dist/claude-office.js install --project
 ```
 
-- 옵션을 생략하면 `--project`(현재 디렉터리)입니다.
+- 옵션을 생략하면 `--user`(전역)입니다. 한 번 설치하면 이 컴퓨터의 어느 폴더에서 Claude Code를 쓰든 사무실에 나타납니다.
+- `--project`는 그 폴더의 `.claude/settings.json`에 씁니다. 이 파일은 보통 git에 커밋되므로, 같은 저장소를 쓰는 다른 사람에게도 훅이 설치될 수 있습니다.
 - 이미 있는 다른 훅은 그대로 두고, Claude Office 항목만 12개 이벤트에 추가합니다.
 - 바꾸기 전에 `settings.json.bak`을 만들고, 바뀐 내용을 diff로 보여 줍니다. 미리 보기만 하려면 `--dry-run`을 붙입니다.
 - 여러 번 실행해도 중복되지 않습니다. 저장소 위치를 옮겼다면 다시 실행하면 경로가 갱신됩니다.
@@ -51,7 +52,7 @@ pnpm dev
 ## 제거
 
 ```bash
-node packages/collector/dist/claude-office.js uninstall --user      # 또는 --project
+node packages/collector/dist/claude-office.js uninstall      # 프로젝트에 설치했다면 --project
 ```
 
 명령 문자열에 `claude-office-hook`이 들어 있는 항목만 지웁니다.
