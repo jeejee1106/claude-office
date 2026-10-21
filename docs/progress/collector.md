@@ -12,8 +12,8 @@
 | 1. 환경 준비·기준선 | 완료 |
 | 2. 훅 확인(문서 + 실제 캡처) | 완료 |
 | 3. collector 구현 | 완료 |
-| 4. 테스트·통합 | 진행 중 (단위 테스트 완료, 실제 서버 통합 남음) |
-| 5. QA (B1·B2·B8) | 대기 |
+| 4. 테스트·통합 | 완료 |
+| 5. QA (B1·B2·B8) | 진행 중 |
 | 6. 문서 | 대기 |
 | 7. PR | 대기 |
 
@@ -103,3 +103,37 @@
 - `target.test.ts`: target 규칙 표 테스트
 - `hook.test.ts`: 실제 프로세스 실행 — 지연, exit 0, stdout 없음, 실제 HTTP 서버로 받은 요청이 `POST /events` + `application/json` + 단일 객체 + Origin 없음(B2), 타임아웃, DEBUG/DISABLE
 - `settings.test.ts`: 기존 훅이 있는 임시 settings.json 으로 install → install(멱등) → uninstall 왕복 후 **원본 텍스트와 동일**, `.bak`, `--dry-run`, 잘못된 JSON 은 건드리지 않음
+
+## 4단계: 통합 (완료)
+
+### 4-1. fixture → 실제 훅 바이너리 → 실제 서버
+- `pnpm start` (포트 7333, 비어 있음 확인) → `curl /healthz` = `{"ok":true,"version":"0.1.0","schema":1}`
+- 스크래치 스크립트로 fixture 28개 중 27개를 실제 세션 순서대로 `node dist/claude-office-hook.js` 에 stdin 으로 넣고(`CLAUDE_OFFICE_DEBUG=1`), 단계마다 `GET /api/state` 를 확인했다.
+- 결과: **모두 exit 0, stdout 없음, 55~64ms**. 보낸 이벤트는 전부 `202`, `auth_success` 알림은 의도대로 보내지 않음. 서버 로그에 `event rejected` 없음.
+
+| 시점 | `/api/state` (세션 `demo-app`) |
+| --- | --- |
+| Read 시작 | main `working`, 도구 `Read:read:notes.txt` |
+| Bash 시작 | main `working`, 도구 `Bash:bash:ls`, 직전 결과 `Edit:ok` |
+| 서브에이전트 Read 중 | main 도구 `Agent:agent:Explore`, 직전 `Bash:error`(false 실패) / 서브에이전트 `a9d6…`(Explore) `working`, 도구 `Read:read:notes.txt` ← **메인이 아닌 서브에이전트로 귀속됨** |
+| 서브에이전트 종료 | 서브에이전트 `gone`, main 직전 `Agent:ok` |
+| 권한 요청 | main `waiting`, attention `permission` |
+| 턴 끝 | main `idle` |
+| 세션 끝 | `ended=yes`, 전원 `gone` |
+
+### 4-2. 실제 Claude Code → 설치된 훅 → 실제 서버 (끝에서 끝까지)
+- `node packages/collector/dist/claude-office.js install --settings <스크래치>/e2e/settings.json` → 12개 이벤트 등록, diff 출력 확인
+- `claude -p "notes.txt 읽기 → echo hi → Agent(Explore)로 Glob" --settings <스크래치>/e2e/settings.json --allowedTools ... --model haiku`
+- 결과 `/api/state`: 실제 세션 `c91a0866…` 생성, `ended=true (other)`, main 직전 결과 `Agent:ok`, 서브에이전트 `a836bc1e…` **type `Explore`**, 직전 결과 **`Glob:ok`**. → **실제 Claude Code 활동이 서버까지 도달하고, 서브에이전트 도구도 올바르게 귀속됨을 확인.**
+- 서버 종료 후 `curl /healthz` 연결 거부 확인.
+
+참고: `-p` 모드라서 project 이름은 cwd(이 worktree 디렉터리) basename 으로 나왔다. 실제 사용 시에는 `CLAUDE_PROJECT_DIR`(프로젝트 루트)의 basename.
+
+### 4-3. 전체 검사
+| 명령 | 결과 |
+| --- | --- |
+| `pnpm typecheck` | 4개 패키지 통과 |
+| `pnpm test` | **283 통과** (shared 46, web 76, server 25, collector 136) |
+| `pnpm exec biome check apps packages` | 오류 0 (86 files) — `pnpm lint` 는 1단계의 worktree 경로 문제로 이 환경에서만 실패 |
+
+apps/server 변경: **없음**. packages/shared 변경: **없음**. apps/web 변경: **없음**.
