@@ -15,7 +15,7 @@
 | 4. 테스트·통합 | 완료 |
 | 5. QA (B1·B2·B8) | 완료 — PASS 3 / FAIL 0 / 미검증 0 |
 | 6. 문서 | 완료 |
-| 7. PR | 진행 중 |
+| 7. PR | 완료 — https://github.com/jeejee1106/claude-office/pull/1 (머지 안 함) |
 
 ## 결정 필요
 
@@ -179,3 +179,21 @@ integration-qa 에이전트 타입은 이 환경에 등록되어 있지 않아, 
 - 문서의 명령 확인: `node packages/collector/dist/claude-office.js --help` 동작, 문제 해결의 `echo … | CLAUDE_OFFICE_DEBUG=1 node …/claude-office-hook.js` 실행 → 서버 꺼진 상태에서 `turn.end not sent: connect ECONNREFUSED 127.0.0.1:7333`, exit 0 (서버가 켜진 경우의 `→ 202` 는 4단계에서 확인). `pnpm dev` 가 server(`tsx watch`)·web(`vite`) dev 스크립트를 실행함을 package.json 에서 확인.
 - `docs/product-spec.md`: 화면 동작이 바뀌지 않아 **수정 안 함**.
 - `CLAUDE.md` 변경 이력: 하네스 파일(`.claude/skills/claude-code-hooks/references/hook-notes.md`)을 처음 채웠으므로 1행 추가.
+
+## 7단계: PR (완료)
+
+- `gh pr create --base main --head feat/collector` → https://github.com/jeejee1106/claude-office/pull/1
+- **머지하지 않았습니다.** main 에는 커밋·머지하지 않았습니다.
+- 변경 범위: `packages/collector/**`(신규), `docs/connect-claude-code.md`(신규), `docs/progress/collector.md`(신규), `.claude/skills/claude-code-hooks/references/hook-notes.md`, `CLAUDE.md`(변경 이력 1행), `pnpm-lock.yaml`. `packages/shared`·`apps/server`·`apps/web` 변경 0.
+- lockfile 참고: collector 추가 외에 pnpm 이 vitest 의 peer `vite@8.3.4` 를 web 과 같은 `8.3.3` 으로 합쳤습니다(dedupe, 테스트 283 통과).
+
+## 아침에 직접 확인해 볼 명령
+
+```bash
+git checkout feat/collector && pnpm install
+pnpm --filter @claude-office/collector build
+node packages/collector/dist/claude-office.js install --user --dry-run   # 미리 보기
+node packages/collector/dist/claude-office.js install --user
+pnpm dev            # 그리고 새 터미널에서 claude 실행 → http://localhost:5173
+node packages/collector/dist/claude-office.js uninstall --user           # 되돌리기
+```
