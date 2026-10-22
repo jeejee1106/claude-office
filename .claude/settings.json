@@ -1,5 +1,19 @@
 {
   "enabledPlugins": {
     "harness@harness-marketplace": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm lint)",
+      "Bash(pnpm test)",
+      "Bash(pnpm --filter @claude-office/web typecheck)",
+      "Bash(pnpm typecheck)",
+      "Bash(curl -s http://127.0.0.1:7333/api/state)",
+      "Bash(shasum *)",
+      "Bash(curl -s http://127.0.0.1:7333/healthz)",
+      "Bash(pnpm --filter @claude-office/web test)",
+      "Bash(pnpm --filter @claude-office/server test)",
+      "Bash(pnpm --filter @claude-office/server typecheck)"
+    ]
   }
 }
