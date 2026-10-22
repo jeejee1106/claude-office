@@ -1,5 +1,5 @@
 import type { OfficeEvent } from '@claude-office/shared'
-import { Application, Container, TextureSource } from 'pixi.js'
+import { Application, Assets, Container, Spritesheet, type Texture, TextureSource } from 'pixi.js'
 import {
   effectiveSessionId,
   type OfficeStore,
@@ -9,10 +9,17 @@ import {
 import type { DirectorOutput } from './commands'
 import { Director } from './director'
 import { BASE_HEIGHT, BASE_WIDTH, PROPS } from './layout'
+import {
+  CHARACTER_ATLAS_URL,
+  type CharacterAtlas,
+  missingAnimationKeys,
+  parseFrameMs,
+} from './render/characterSheet'
 import { PlaceholderRenderer } from './render/PlaceholderRenderer'
 import type { SceneRenderer } from './render/types'
 import { Roster } from './roster'
 import { routeSceneEvent } from './sceneRouting'
+import { VARIANT_COUNT } from './variant'
 
 /*
  * PixiJS 씬. 자체 ticker 로 돌고 React 상태를 프레임마다 건드리지 않는다.
@@ -63,6 +70,8 @@ export class OfficeScene {
       roundPixels: true,
       backgroundColor: 0x1b1f3b,
     })
+    // 캐릭터 아틀라스: 실패해도 null → 플레이스홀더 캐릭터로 그린다(화면이 비지 않게)
+    const atlas = await loadCharacterAtlas()
     if (this.destroyed) {
       app.destroy(true, { children: true })
       return
@@ -83,7 +92,7 @@ export class OfficeScene {
     const lighting = new Container()
     app.stage.addChild(floor, furniture, characters, lighting)
 
-    const renderer = createRenderer({ floor, furniture, characters, lighting }, overlay)
+    const renderer = createRenderer({ floor, furniture, characters, lighting }, overlay, atlas)
     this.renderer = renderer
     renderer.drawRoom(PROPS)
     this.roster = new Roster(
@@ -198,12 +207,42 @@ export class OfficeScene {
 }
 
 /**
- * 렌더러 교체 지점. 아틀라스가 생기면 여기서 AtlasRenderer 를 반환한다
- * (예: Assets.load('/assets/office.json') 성공 시 AtlasRenderer, 실패 시 PlaceholderRenderer).
+ * 렌더러 교체 지점. 지금은 캐릭터만 아틀라스 스프라이트(있을 때)이고 방·가구·표시는 코드로 그린다.
+ * 가구·바닥 아틀라스가 생기면 여기서 함께 넘긴다.
  */
 function createRenderer(
   layers: ConstructorParameters<typeof PlaceholderRenderer>[0],
   overlay: HTMLElement,
+  atlas: CharacterAtlas<Texture> | null,
 ): SceneRenderer {
-  return new PlaceholderRenderer(layers, overlay)
+  return new PlaceholderRenderer(layers, overlay, atlas)
+}
+
+/** characters.json(+png) 로드. 실패·형식 오류면 경고만 남기고 null */
+async function loadCharacterAtlas(): Promise<CharacterAtlas<Texture> | null> {
+  const url = `${import.meta.env.BASE_URL}${CHARACTER_ATLAS_URL}`
+  try {
+    const sheet: unknown = await Assets.load(url)
+    if (!(sheet instanceof Spritesheet) || Object.keys(sheet.animations).length === 0) {
+      console.warn(
+        `[claude-office] ${url} 이 캐릭터 아틀라스 형식이 아님 — 플레이스홀더로 그립니다.`,
+      )
+      return null
+    }
+    // 전역 기본값(nearest)과 별개로 확실히 한다 — 번진 픽셀 아트 방지
+    sheet.textureSource.scaleMode = 'nearest'
+    const missing = missingAnimationKeys(sheet.animations, VARIANT_COUNT)
+    if (missing.length > 0) {
+      console.warn(
+        `[claude-office] 캐릭터 아틀라스에 애니메이션 ${missing.length}개 없음(예: ${missing[0]}) — 그 동작만 플레이스홀더로 그립니다.`,
+      )
+    }
+    return { animations: sheet.animations, frameMs: parseFrameMs(sheet.data.meta) }
+  } catch (err) {
+    console.warn(
+      `[claude-office] 캐릭터 아틀라스 로드 실패(${url}) — 플레이스홀더로 그립니다.`,
+      err,
+    )
+    return null
+  }
 }

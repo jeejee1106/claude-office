@@ -13,7 +13,7 @@ import {
   isCharacterCommand,
 } from '../src/scene/commands'
 import { Director } from '../src/scene/director'
-import { MAIN_VARIANT, VARIANT_COUNT, variantFor } from '../src/scene/variant'
+import { FIXED_VARIANTS, MAIN_VARIANT, VARIANT_COUNT, variantFor } from '../src/scene/variant'
 import { ev, loadSampleSession } from './helpers'
 
 /** 이벤트 열을 reduce + director 에 순서대로 흘린다 */
@@ -391,5 +391,40 @@ describe('director 시나리오', () => {
       expect(n).toBeGreaterThanOrEqual(1)
       expect(n).toBeLessThan(VARIANT_COUNT)
     }
+  })
+
+  it('색 변형: 자주 쓰는 서브 종류는 서로 다른 고정 색(1..N-1), 나머지는 해시', () => {
+    const common = [
+      'Explore',
+      'Plan',
+      'general-purpose',
+      'claude-code-guide',
+      'statusline-setup',
+      'claude',
+    ]
+    const vs = common.map((t) => variantFor('sub-1', t))
+    expect(new Set(vs).size).toBe(common.length)
+    for (const v of vs) {
+      expect(v).toBeGreaterThanOrEqual(1)
+      expect(v).toBeLessThan(VARIANT_COUNT)
+    }
+    // 해시로는 같은 색(3)이던 두 종류가 이제 다르다
+    expect(variantFor('a', 'Explore')).not.toBe(variantFor('b', 'general-purpose'))
+    // 표 자체도 겹침 없음·범위 안
+    const table = Object.values(FIXED_VARIANTS)
+    expect(new Set(table).size).toBe(table.length)
+    expect(table.every((v) => v >= 1 && v < VARIANT_COUNT && v !== MAIN_VARIANT)).toBe(true)
+    // 메인은 종류와 무관하게 0
+    expect(variantFor('main', 'Plan')).toBe(MAIN_VARIANT)
+    // 표에 없는 종류·프로토타입 이름은 해시(1..N-1, 결정적)
+    for (const t of ['office-scene-dev', 'toString', 'constructor', '__proto__']) {
+      const n = variantFor('x', t)
+      expect(Number.isInteger(n)).toBe(true)
+      expect(n).toBeGreaterThanOrEqual(1)
+      expect(n).toBeLessThan(VARIANT_COUNT)
+      expect(variantFor('y', t)).toBe(n)
+    }
+    // agentType 이 없으면 agentId 해시
+    expect(variantFor('sub-z', undefined)).toBe(variantFor('sub-z', undefined))
   })
 })
