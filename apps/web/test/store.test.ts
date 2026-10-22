@@ -62,7 +62,7 @@ describe('officeStore', () => {
     expect(pickDefaultSession(s)).toBe('old')
   })
 
-  it('사용자가 고른 세션이 우선, 사라지면 자동으로', () => {
+  it('사용자가 고른 세션이 우선(다른 층이면 그 층으로), 사라지면 그 층의 최근 세션으로', () => {
     const store = createOfficeStore()
     let state = createInitialState()
     for (const e of loadSampleSession()) state = reduce(state, e)
@@ -71,10 +71,13 @@ describe('officeStore', () => {
       ev({ sessionId: 'other', kind: 'session.start', ts: '2026-01-01T00:00:40.000Z' }),
     )
     store.applyMessage({ type: 'snapshot', state, recent: [], ts: '2026-01-01T00:00:40.000Z' })
+    // 처음 접속: pickDefaultSession('other') 의 층으로 고정
     expect(effectiveSessionId(store.getState())).toBe('other')
     store.selectSession('sample')
     expect(effectiveSessionId(store.getState())).toBe('sample')
+    expect(store.getState().selectedFloor).toBe('p:demo-app')
     store.selectSession('missing')
-    expect(effectiveSessionId(store.getState())).toBe('other')
+    // 이제는 층에 머문다: demo-app 층의 가장 최근 세션
+    expect(effectiveSessionId(store.getState())).toBe('sample')
   })
 })

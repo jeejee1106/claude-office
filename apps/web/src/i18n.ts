@@ -92,6 +92,9 @@ export const UI = {
     errorTag: '⚠ 오류',
     recent: '최근 이벤트',
     session: '세션',
+    floors: '층',
+    floorNo: '{n}층',
+    floorNew: '새 활동',
     noSession: '세션 없음',
     auto: '자동 (가장 최근 활성',
     ended: '(종료)',
@@ -126,6 +129,9 @@ export const UI = {
     errorTag: '⚠ error',
     recent: 'Recent events',
     session: 'Session',
+    floors: 'Floors',
+    floorNo: '{n}F',
+    floorNew: 'new activity',
     noSession: 'No sessions',
     auto: 'Auto (most recent',
     ended: '(ended)',
@@ -155,6 +161,11 @@ export type UiKey = keyof (typeof UI)['ko']
 
 export function t(key: UiKey, lang: Lang = getLang()): string {
   return UI[lang][key]
+}
+
+/** 층 탭 이름: "1층 claude-office" / "1F claude-office" */
+export function floorLabel(n: number, name: string, lang: Lang = getLang()): string {
+  return `${t('floorNo', lang).replace('{n}', String(n))} ${name}`
 }
 
 // ---------------------------------------------------------------------------
