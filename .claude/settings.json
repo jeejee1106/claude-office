@@ -13,7 +13,21 @@
       "Bash(curl -s http://127.0.0.1:7333/healthz)",
       "Bash(pnpm --filter @claude-office/web test)",
       "Bash(pnpm --filter @claude-office/server test)",
-      "Bash(pnpm --filter @claude-office/server typecheck)"
+      "Bash(pnpm --filter @claude-office/server typecheck)",
+      "Bash(pnpm --filter @claude-office/web build)",
+      "Bash(pnpm --filter @claude-office/assets build)",
+      "Bash(pnpm --filter @claude-office/assets verify)",
+      "Bash(pnpm --filter @claude-office/assets preview)",
+      "Bash(pnpm --filter @claude-office/assets test)",
+      "Bash(pnpm --filter @claude-office/assets typecheck)",
+      "Bash(pnpm --filter @claude-office/collector build)",
+      "Bash(pnpm --filter @claude-office/collector test)",
+      "Bash(pnpm --filter @claude-office/collector typecheck)",
+      "Bash(pnpm --filter @claude-office/shared test)",
+      "Bash(pnpm --filter @claude-office/shared typecheck)",
+      "Bash(pnpm build)",
+      "Bash(pnpm exec biome check apps/web)",
+      "Bash(pnpm exec biome check apps packages)"
     ]
   }
 }
