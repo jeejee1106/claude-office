@@ -19,6 +19,7 @@ import {
   type SpotRef,
   toolActivity,
 } from './activityMap'
+import { LEAVE_REPORT_MAX_MS } from './Character'
 import type { CharacterCommand, DirectorOutput } from './commands'
 import { SPOTS, type SpotId, SUB_DESKS } from './layout'
 import { variantFor } from './variant'
@@ -67,6 +68,11 @@ export class Director {
   private readonly deskOwner = new Map<SpotId, string>()
   /** 스팟별 슬롯 점유: spot → (agentId → slot) */
   private readonly occupancy = new Map<SpotId, Map<string, number>>()
+  /**
+   * 보고 후 머무는(report 퇴장) 서브가 비운 책상 → 비운 시각. 새 서브는 이 책상을
+   * LEAVE_REPORT_MAX_MS 동안 피한다(머무는 사람과 겹치지 않도록). 빈 책상이 이것뿐이면 쓴다.
+   */
+  private readonly deskFreedAt = new Map<SpotId, number>()
   private lights = false
   private serversBusy = false
   private readonly lang: () => Lang
@@ -100,6 +106,7 @@ export class Director {
     this.chars.clear()
     this.deskOwner.clear()
     this.occupancy.clear()
+    this.deskFreedAt.clear()
 
     const session = sessionId !== null ? state.sessions[sessionId] : undefined
     const open = session !== undefined && session.endedAt === undefined
@@ -162,6 +169,7 @@ export class Director {
       this.chars.clear()
       this.deskOwner.clear()
       this.occupancy.clear()
+      this.deskFreedAt.clear()
       this.updateServers(out, cause)
       return out
     }
@@ -171,6 +179,9 @@ export class Director {
       if (info === undefined) return out
       if (info.persistentMark !== null) out.push(this.markCmd(info, null, null, cause))
       out.push(this.leaveCmd(info, act, cause))
+      if (act.leaveStyle === 'report' && info.desk !== 'commonTable') {
+        this.deskFreedAt.set(info.desk, this.now())
+      }
       this.release(info)
       this.updateServers(out, cause)
       return out
@@ -345,13 +356,17 @@ export class Director {
   /** 메인은 창가 큰 책상, 서브는 빈 책상을 순서대로, 모자라면 공용 테이블 */
   private assignDesk(agentId: string): SpotId {
     if (agentId === MAIN_AGENT_ID) return 'mainDesk'
-    for (const d of SUB_DESKS) {
-      if (!this.deskOwner.has(d)) {
-        this.deskOwner.set(d, agentId)
-        return d
-      }
+    const now = this.now()
+    const lingering = (d: SpotId) => {
+      const t = this.deskFreedAt.get(d)
+      return t !== undefined && now - t < LEAVE_REPORT_MAX_MS
     }
-    return 'commonTable'
+    const free = SUB_DESKS.filter((d) => !this.deskOwner.has(d))
+    const d = free.find((d) => !lingering(d)) ?? free[0]
+    if (d === undefined) return 'commonTable'
+    this.deskOwner.set(d, agentId)
+    this.deskFreedAt.delete(d)
+    return d
   }
 
   private resolve(info: CharInfo, ref: SpotRef): SpotId {

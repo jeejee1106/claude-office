@@ -43,6 +43,8 @@ export class Roster {
             this.onScene(cmd)
           } else {
             this.lightsOffPending = cmd
+            // 보고 후 머무는 서브가 조명 끄기를 3초 붙잡지 않도록 머묾을 끊는다
+            for (const c of this.departing) c.hurryLeave()
           }
         } else {
           this.onScene(cmd)

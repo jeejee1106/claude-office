@@ -55,7 +55,8 @@ export type CharacterCommand =
   | (Base & { type: 'mark'; mark: Mark | null; durationMs: number | null })
   /**
    * 문으로 걸어가서 퇴장(제거). style 이 있으면 짧은 준비 동작(pack: 짐 챙기기 → 가방 들고,
-   * report: 팀장 책상 쪽을 보고 보고) 후 정해진 시간에 걸어 나간다 — 전체가 LEAVE_MAX_MS 안.
+   * report: 팀장 책상 쪽을 보고 보고 → 3초 머묾) 후 정해진 시간에 걸어 나간다
+   * — pack 은 LEAVE_MAX_MS, report 는 LEAVE_REPORT_MAX_MS 안.
    */
   | (Base & { type: 'leave'; say?: string | null; style?: 'pack' | 'report' | null })
   /** 즉시 제거(syncAll) */

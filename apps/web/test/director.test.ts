@@ -6,6 +6,7 @@ import {
 } from '@claude-office/shared'
 import { describe, expect, it } from 'vitest'
 import { LINES } from '../src/i18n'
+import { LEAVE_REPORT_MAX_MS } from '../src/scene/Character'
 import {
   type CharacterCommand,
   type DirectorOutput,
@@ -203,13 +204,47 @@ describe('director 시나리오', () => {
     expect(director.deskOf('main')).toBe('mainDesk')
   })
 
-  it('퇴장한 서브의 책상은 다음 서브가 재사용한다', () => {
-    const { director } = run([
-      ev({ kind: 'agent.spawn', agentId: 'a' }),
-      ev({ kind: 'agent.finish', agentId: 'a', ts: '2026-01-01T00:00:01.000Z' }),
-      ev({ kind: 'agent.spawn', agentId: 'b', ts: '2026-01-01T00:00:02.000Z' }),
+  /** 이벤트 ts 를 director 시계로 쓰는 run */
+  const runTimed = (events: OfficeEvent[]) => {
+    let now = 0
+    const director = new Director({ now: () => now })
+    let state: OfficeState = createInitialState()
+    for (const e of events) {
+      now = Date.parse(e.ts)
+      state = reduce(state, e)
+      director.handle(e, state.sessions[e.sessionId])
+    }
+    return director
+  }
+  const at = (sec: number) =>
+    new Date(Date.parse('2026-01-01T00:00:00.000Z') + sec * 1000).toISOString()
+
+  it('퇴장한 서브의 책상은 보고·머묾(LEAVE_REPORT_MAX_MS)이 끝난 뒤 다음 서브가 재사용한다', () => {
+    const director = runTimed([
+      ev({ kind: 'agent.spawn', agentId: 'a', ts: at(0) }),
+      ev({ kind: 'agent.finish', agentId: 'a', ts: at(1) }),
+      ev({ kind: 'agent.spawn', agentId: 'b', ts: at(1 + LEAVE_REPORT_MAX_MS / 1000) }),
     ])
     expect(director.deskOf('b')).toBe('desk1')
+  })
+
+  it('보고 후 머무는 서브의 책상은 피한다(겹치지 않게), 빈 책상이 그것뿐이면 쓴다', () => {
+    const d1 = runTimed([
+      ev({ kind: 'agent.spawn', agentId: 'a', ts: at(0) }),
+      ev({ kind: 'agent.finish', agentId: 'a', ts: at(1) }),
+      ev({ kind: 'agent.spawn', agentId: 'b', ts: at(2) }),
+      // 같은 ID 재사용(재개)도 새 책상
+      ev({ kind: 'agent.spawn', agentId: 'a', ts: at(2.5) }),
+    ])
+    expect(d1.deskOf('b')).toBe('desk2')
+    expect(d1.deskOf('a')).toBe('desk3')
+
+    const d2 = runTimed([
+      ...['a', 'b', 'c', 'd'].map((id) => ev({ kind: 'agent.spawn', agentId: id, ts: at(0) })),
+      ev({ kind: 'agent.finish', agentId: 'b', ts: at(1) }),
+      ev({ kind: 'agent.spawn', agentId: 'e', ts: at(2) }),
+    ])
+    expect(d2.deskOf('e')).toBe('desk2')
   })
 
   it('같은 스팟에 여럿이 가면 서로 다른 슬롯', () => {

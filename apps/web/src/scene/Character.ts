@@ -33,7 +33,9 @@ export type CharacterState = 'spawning' | 'walking' | 'acting' | 'idle' | 'leavi
  * - 뒤에 명령이 쌓여 있으면 FAST_WALK_MULTIPLIER 배(= MAX_WALK_MS / 2 안에 도착).
  * - 가장 오래 기다린 명령이 MAX_LAG_MS 를 넘기면 현재 명령을 목적지로 순간이동시키고
  *   중간 명령을 버린다(마지막 목표·spawn·leave 는 보존).
- * - leave 는 LEAVE_MAX_MS 안에 반드시 gone.
+ * - leave 는 LEAVE_MAX_MS 안에 반드시 gone. 예외: 서브 완료 보고(report)는 3초 머물기 때문에
+ *   LEAVE_REPORT_MAX_MS(기획서 2절 "과장 수준" 예외). 머무는 중 조명이 꺼지면(세션 종료)
+ *   hurryLeave() 로 머묾을 끊고 그때부터 LEAVE_MAX_MS 안에 gone.
  * - update(dt) 는 큰 dt(탭 백그라운드, 낮은 fps)도 STEP_MS 조각으로 나눠 그대로 소비한다
  *   (dt 를 잘라 버리면 화면이 슬로모션이 되어 계속 뒤처진다).
  */
@@ -45,16 +47,21 @@ export const FAST_WALK_MULTIPLIER = 2
 export const MAX_WALK_MS = 1200
 /** 대기 명령이 이 시간 넘게 밀리면 따라잡기(순간이동 + 중간 명령 스킵) */
 export const MAX_LAG_MS = 1500
-/** leave 시작 후 이 시간 안에 반드시 제거 */
+/** leave 시작 후 이 시간 안에 반드시 제거(report 제외) */
 export const LEAVE_MAX_MS = 2000
 /** 도착 후 다음 명령으로 넘어가기 전 최소 머무는 시간 — 행동이 한 번은 보이도록 */
 export const MIN_DWELL_MS = 350
 /**
  * style 있는 퇴장(세션 종료 "퇴근하겠습니다!", 서브 완료 "다녀왔습니다!"):
- * 준비 동작 LEAVE_PREP_MS → 정해진 시간 LEAVE_WALK_MS 동안 걸어 나감 → 페이드 FADE_MS.
- * 합계 1.8초 < LEAVE_MAX_MS(2초). 대사는 퇴장 내내(약 1.5초 이상) 보인다.
+ * 준비 동작 LEAVE_PREP_MS → (report 만) 그 자리에 REPORT_LINGER_MS 머묾
+ * → 정해진 시간 LEAVE_WALK_MS 동안 걸어 나감 → 페이드 FADE_MS.
+ * - pack:   0.4 + 1.1 + 0.3 = 1.8초 < LEAVE_MAX_MS(2초)
+ * - report: 0.4 + 3.0 + 1.1 + 0.3 = 4.8초 < LEAVE_REPORT_MAX_MS(5초)
+ * 퇴장 대사는 사라질 때까지 유지(pack 약 1.8초, report 약 4.8초).
  */
 export const LEAVE_PREP_MS = 400
+/** 서브 완료 보고 뒤 문으로 나가기 전 그 자리에 머무는 시간(기획서 5절 "서브에이전트 완료") */
+export const REPORT_LINGER_MS = 3000
 /**
  * 대사를 띄우는 제자리 행동(멈칫·잠깐 일어남)이 뒤에 도구 명령이 와서 끊기기 전 최소 시간.
  * 도구 말풍선 우선(기획서 6절)이지만 "앗…" 이 읽히기는 해야 한다 — 도구 말풍선 지연은 이만큼(<2초 예산).
@@ -62,6 +69,8 @@ export const LEAVE_PREP_MS = 400
 export const DIALOG_MIN_MS = 600
 export const LEAVE_WALK_MS = 1100
 export const FADE_MS = 300
+/** report 퇴장 시작 후 이 시간 안에 반드시 제거(4.8초 + 여유 0.2초) */
+export const LEAVE_REPORT_MAX_MS = 5000
 /** update 한 번에 진행하는 최대 시간 조각 */
 const STEP_MS = 50
 
@@ -100,7 +109,7 @@ export class Character {
   /** 현재 act 가 진행된 시간(끊을 수 있는 act 용) */
   private actMs = 0
   /** style 있는 leave 의 단계 */
-  private leavePhase: 'prep' | 'walk' | 'fade' | null = null
+  private leavePhase: 'prep' | 'linger' | 'walk' | 'fade' | null = null
   private _lastCause: string | null = null
 
   constructor(agentId: string, view: CharacterView) {
@@ -235,6 +244,13 @@ export class Character {
     this.queue.compactToLast(this.clock)
   }
 
+  /** 보고 후 머무는 중이면 머묾을 끊고 바로 문으로(세션 종료 — 조명 끄기가 기다리지 않도록) */
+  hurryLeave(): void {
+    if (this.state !== 'leaving') return
+    this.leaveDeadline = Math.min(this.leaveDeadline, this.clock + LEAVE_MAX_MS)
+    if (this.leavePhase === 'linger') this.waitMs = 0
+  }
+
   destroy(): void {
     this.view.destroy()
   }
@@ -308,7 +324,8 @@ export class Character {
         if (cmd.say) this.say(cmd.say, null)
         this.view.setEffect(null)
         this.state = 'leaving'
-        this.leaveDeadline = this.clock + LEAVE_MAX_MS
+        this.leaveDeadline =
+          this.clock + (cmd.style === 'report' ? LEAVE_REPORT_MAX_MS : LEAVE_MAX_MS)
         if (cmd.style === 'pack' || cmd.style === 'report') {
           this.leavePhase = 'prep'
           if (cmd.style === 'report') this.dir = this.dirToward(SPOTS.mainDesk.tile)
@@ -343,8 +360,16 @@ export class Character {
         if (this.queue.length > 0) this.waitMs = MIN_DWELL_MS
         break
       case 'leave':
-        if (this.leavePhase === 'prep') {
-          // 준비 동작 끝 → 정해진 시간 동안 문으로 (짐 챙긴 경우 가방을 들고)
+        if (this.leavePhase === 'prep' && cmd.style === 'report') {
+          // 보고 끝 → 그 자리에 서서(팀장 쪽을 본 채) 머문다. 대사는 계속 떠 있다.
+          this.leavePhase = 'linger'
+          this.view.setAnimation('idle_stand', this.dir)
+          this.waitMs = REPORT_LINGER_MS
+          this.current = cmd
+          return
+        }
+        if (this.leavePhase === 'prep' || this.leavePhase === 'linger') {
+          // 준비 동작(·머묾) 끝 → 정해진 시간 동안 문으로 (짐 챙긴 경우 가방을 들고)
           this.leavePhase = 'walk'
           if (cmd.style === 'pack') this.view.setEffect('bag')
           this.setPathTo(DOOR_OUTSIDE, tileFoot(DOOR_OUTSIDE), LEAVE_WALK_MS)
