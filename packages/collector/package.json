@@ -1,0 +1,25 @@
+{
+  "name": "@claude-office/collector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Office collector: Claude Code hook -> OfficeEvent -> local server, plus install/uninstall of the hooks in settings.json.",
+  "type": "module",
+  "bin": {
+    "claude-office-hook": "./dist/claude-office-hook.js",
+    "claude-office": "./dist/claude-office.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@claude-office/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3",
+    "vitest": "4.1.12"
+  }
+}

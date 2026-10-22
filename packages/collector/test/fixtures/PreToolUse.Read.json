@@ -1,0 +1,17 @@
+{
+  "_fixture_source": "capture 2026-10-22, Claude Code 2.1.306 (claude -p, sanitized)",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/Users/alice/.claude/projects/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/Users/alice/work/demo-app",
+  "prompt_id": "00000000-0000-4000-8000-000000000002",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/Users/alice/work/demo-app/notes.txt"
+  },
+  "tool_use_id": "toolu_01ErwRA47q1M2VvE7ngAy8n3"
+}

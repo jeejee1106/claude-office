@@ -1,0 +1,31 @@
+{
+  "_fixture_source": "capture 2026-10-22, Claude Code 2.1.306 (claude -p, sanitized)",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/Users/alice/.claude/projects/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/Users/alice/work/demo-app",
+  "prompt_id": "00000000-0000-4000-8000-000000000002",
+  "permission_mode": "default",
+  "agent_id": "a9d6fcc6fccdd5788",
+  "agent_type": "Explore",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Grep",
+  "tool_input": {
+    "pattern": "hello",
+    "path": "/Users/alice/work/demo-app",
+    "output_mode": "content",
+    "-n": true
+  },
+  "tool_response": {
+    "mode": "content",
+    "numFiles": 0,
+    "filenames": "<redacted filenames>",
+    "content": "<redacted content>",
+    "numLines": 1,
+    "totalLines": 1
+  },
+  "tool_use_id": "toolu_01SwTEEXUPFJsR7YbA7JAukP",
+  "duration_ms": 13
+}

@@ -1,0 +1,437 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`normalize: 모든 fixture > Notification.idle_prompt.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "attention",
+  "project": "demo-app",
+  "reason": "idle",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > Notification.permission_prompt.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "attention",
+  "project": "demo-app",
+  "reason": "permission",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PermissionRequest.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "attention",
+  "project": "demo-app",
+  "reason": "permission",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUse.Agent.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_01EknkaJnE1HeHM5gRbyvMWD",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "ok",
+  "tool": {
+    "category": "agent",
+    "name": "Agent",
+    "target": "Explore",
+    "useId": "toolu_01EknkaJnE1HeHM5gRbyvMWD",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUse.Bash.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_0199XHvwdFCEum32vp6nLAj4",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "ok",
+  "tool": {
+    "category": "bash",
+    "name": "Bash",
+    "target": "ls",
+    "useId": "toolu_0199XHvwdFCEum32vp6nLAj4",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUse.Edit.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_01SFYB6GvUc6fuZsjKczgaw2",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "ok",
+  "tool": {
+    "category": "edit",
+    "name": "Edit",
+    "target": "notes.txt",
+    "useId": "toolu_01SFYB6GvUc6fuZsjKczgaw2",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUse.Read.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_01ErwRA47q1M2VvE7ngAy8n3",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "ok",
+  "tool": {
+    "category": "read",
+    "name": "Read",
+    "target": "notes.txt",
+    "useId": "toolu_01ErwRA47q1M2VvE7ngAy8n3",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUse.subagent-Grep.json 1`] = `
+{
+  "agentId": "a9d6fcc6fccdd5788",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_01SwTEEXUPFJsR7YbA7JAukP",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "ok",
+  "tool": {
+    "category": "search",
+    "name": "Grep",
+    "target": "hello",
+    "useId": "toolu_01SwTEEXUPFJsR7YbA7JAukP",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUse.subagent-Read.json 1`] = `
+{
+  "agentId": "a9d6fcc6fccdd5788",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_01BJucgZq4ubB1AfxWxT4S4q",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "ok",
+  "tool": {
+    "category": "read",
+    "name": "Read",
+    "target": "notes.txt",
+    "useId": "toolu_01BJucgZq4ubB1AfxWxT4S4q",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PostToolUseFailure.Bash-fail.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.end/toolu_01HwDZwfsRDdr9xGrV8ihTYd",
+  "kind": "tool.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "status": "error",
+  "tool": {
+    "category": "bash",
+    "name": "Bash",
+    "target": "false",
+    "useId": "toolu_01HwDZwfsRDdr9xGrV8ihTYd",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreCompact.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "context.compact",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "trigger": "manual",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.Agent.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01EknkaJnE1HeHM5gRbyvMWD",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "agent",
+    "name": "Agent",
+    "target": "Explore",
+    "useId": "toolu_01EknkaJnE1HeHM5gRbyvMWD",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.Bash.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_0199XHvwdFCEum32vp6nLAj4",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "bash",
+    "name": "Bash",
+    "target": "ls",
+    "useId": "toolu_0199XHvwdFCEum32vp6nLAj4",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.Bash-fail.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01HwDZwfsRDdr9xGrV8ihTYd",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "bash",
+    "name": "Bash",
+    "target": "false",
+    "useId": "toolu_01HwDZwfsRDdr9xGrV8ihTYd",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.Edit.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01SFYB6GvUc6fuZsjKczgaw2",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "edit",
+    "name": "Edit",
+    "target": "notes.txt",
+    "useId": "toolu_01SFYB6GvUc6fuZsjKczgaw2",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.Read.json 1`] = `
+{
+  "agentId": "main",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01ErwRA47q1M2VvE7ngAy8n3",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "read",
+    "name": "Read",
+    "target": "notes.txt",
+    "useId": "toolu_01ErwRA47q1M2VvE7ngAy8n3",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.nested-Glob.json 1`] = `
+{
+  "agentId": "a473c5664f8a7266d",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01G9QBDcFVEVa8xEYFx7BHth",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "search",
+    "name": "Glob",
+    "target": "**/*",
+    "useId": "toolu_01G9QBDcFVEVa8xEYFx7BHth",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.subagent-Agent.json 1`] = `
+{
+  "agentId": "a2622b7efa90f6e33",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01N7BQJMQAXDpAZ5KywUHPmF",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "agent",
+    "name": "Agent",
+    "target": "Explore",
+    "useId": "toolu_01N7BQJMQAXDpAZ5KywUHPmF",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.subagent-Grep.json 1`] = `
+{
+  "agentId": "a9d6fcc6fccdd5788",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01SwTEEXUPFJsR7YbA7JAukP",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "search",
+    "name": "Grep",
+    "target": "hello",
+    "useId": "toolu_01SwTEEXUPFJsR7YbA7JAukP",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > PreToolUse.subagent-Read.json 1`] = `
+{
+  "agentId": "a9d6fcc6fccdd5788",
+  "id": "00000000-0000-4000-8000-000000000001/tool.start/toolu_01BJucgZq4ubB1AfxWxT4S4q",
+  "kind": "tool.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "tool": {
+    "category": "read",
+    "name": "Read",
+    "target": "notes.txt",
+    "useId": "toolu_01BJucgZq4ubB1AfxWxT4S4q",
+  },
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > SessionEnd.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "session.end",
+  "project": "demo-app",
+  "reason": "other",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > SessionStart.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "session.start",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "source": "startup",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > Stop.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "turn.end",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > SubagentStart.json 1`] = `
+{
+  "agentId": "a9d6fcc6fccdd5788",
+  "agentType": "Explore",
+  "id": "00000000-0000-4000-8000-000000000001/agent.spawn/a9d6fcc6fccdd5788",
+  "kind": "agent.spawn",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > SubagentStart.nested.json 1`] = `
+{
+  "agentId": "a473c5664f8a7266d",
+  "agentType": "Explore",
+  "id": "00000000-0000-4000-8000-000000000001/agent.spawn/a473c5664f8a7266d",
+  "kind": "agent.spawn",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > SubagentStop.json 1`] = `
+{
+  "agentId": "a9d6fcc6fccdd5788",
+  "id": "00000000-0000-4000-8000-000000000001/agent.finish/a9d6fcc6fccdd5788",
+  "kind": "agent.finish",
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;
+
+exports[`normalize: 모든 fixture > UserPromptSubmit.json 1`] = `
+{
+  "agentId": "main",
+  "id": "id-1",
+  "kind": "prompt.submit",
+  "length": 17,
+  "project": "demo-app",
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "ts": "2026-10-22T00:00:00.000Z",
+  "v": 1,
+}
+`;

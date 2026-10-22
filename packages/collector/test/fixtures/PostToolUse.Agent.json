@@ -1,0 +1,38 @@
+{
+  "_fixture_source": "capture 2026-10-22, Claude Code 2.1.306 (claude -p, sanitized)",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/Users/alice/.claude/projects/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/Users/alice/work/demo-app",
+  "prompt_id": "00000000-0000-4000-8000-000000000002",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Agent",
+  "tool_input": {
+    "description": "<redacted description>",
+    "prompt": "<redacted prompt>",
+    "subagent_type": "Explore",
+    "run_in_background": false
+  },
+  "tool_response": {
+    "status": "completed",
+    "prompt": "<redacted prompt>",
+    "agentId": "a9d6fcc6fccdd5788",
+    "agentType": "Explore",
+    "harnessNoteCount": 0,
+    "harnessTailCount": 0,
+    "harnessSectionHash": "d0e58a72f40d5f9b",
+    "content": "<redacted content>",
+    "resolvedModel": "claude-haiku-5-5",
+    "totalDurationMs": 5451,
+    "totalTokens": 19203,
+    "totalToolUseCount": 2,
+    "usage": "<redacted usage>",
+    "toolStats": "<redacted toolStats>",
+    "canContinueAgent": true
+  },
+  "tool_use_id": "toolu_01EknkaJnE1HeHM5gRbyvMWD",
+  "duration_ms": 5452
+}
