@@ -35,7 +35,7 @@ node /path/to/claude-office/packages/collector/dist/claude-office.js install --p
 - 여러 번 실행해도 중복되지 않습니다. 저장소 위치를 옮겼다면 다시 실행하면 경로가 갱신됩니다.
 - 훅 명령은 `node "<저장소>/packages/collector/dist/claude-office-hook.js"`입니다. Claude Code가 실행되는 환경의 PATH에 `node`(22 이상)가 있어야 합니다.
 
-이미 실행 중인 Claude Code 세션은 설정을 다시 읽어야 하므로 새로 시작하세요.
+이미 실행 중인 Claude Code 세션에도 보통 바로 적용됩니다. 캐릭터가 움직이지 않으면 Claude Code를 새로 시작하세요.
 
 ## 3. 대시보드 실행
 
