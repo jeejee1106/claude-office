@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { allLines, LINES } from '../src/i18n'
 import type { AnimName, Mark } from '../src/scene/activityMap'
 import { ERROR_REACTION_MS, SPEECH_MS, toolActivity } from '../src/scene/activityMap'
+import { LEAVE_REPORT_MAX_MS } from '../src/scene/Character'
 import { isCharacterCommand } from '../src/scene/commands'
 import { Director } from '../src/scene/director'
 import type { CharacterView } from '../src/scene/render/types'
@@ -24,6 +25,11 @@ const LAG_BUDGET_MS = 2000
  * 그만큼(따라잡기 MAX_LAG_MS 1.5초 이내) 늦게 시작한다 → 3.5초. 3차 작업에서도 그대로 둔다.
  */
 const LEAVE_BUDGET_MS = 3500
+/**
+ * 서브 완료(report) 퇴장은 보고 0.4 + 머묾 3.0 + 걷기 1.1 + 페이드 0.3 = 4.8초(LEAVE_REPORT_MAX_MS 5초 안)
+ * + 따라잡기 1.5초 → 6.5초. session.end 의 조명 끄기는 그대로 LEAVE_BUDGET_MS(머묾은 hurryLeave 로 끊김).
+ */
+const REPORT_LEAVE_BUDGET_MS = LEAVE_REPORT_MAX_MS + 1500
 const DIALOG = allLines()
 const FAREWELL = new Set([...LINES.ko.sessionEnd, ...LINES.en.sessionEnd])
 
@@ -73,6 +79,8 @@ interface SimResult {
   lightsOffAt: number | null
   visibleAtLightsOff: number
   sessionEndAt: number
+  /** agent.finish 후 서브가 화면에 남아 있던 최대 시간 */
+  subLingerMs: number
 }
 
 function simulate(frameMs: number): SimResult {
@@ -131,17 +139,26 @@ function simulate(frameMs: number): SimResult {
 
   const violations: string[] = []
   const endAt = at(events.at(-1) as OfficeEvent)
-  const finishAt = new Map<string, number>()
+  /** agentId → [퇴장 이벤트 시각, 허용 시간] */
+  const finishAt = new Map<string, { at: number; budget: number }>()
   let next = 0
   let frames = 0
+  let subLingerMs = 0
   const started = performance.now()
   for (let t = frameMs; t <= endAt + LEAVE_BUDGET_MS; t += frameMs) {
     // 프레임 사이에 도착한 이벤트(WS 는 rAF 와 무관하게 도착) → 이벤트 시각에 처리
     while (next < events.length && at(events[next] as OfficeEvent) <= t) {
       const e = events[next++] as OfficeEvent
       simNow = at(e)
-      if (e.kind === 'agent.finish') finishAt.set(e.agentId, simNow)
-      if (e.kind === 'session.end') for (const id of relevant.keys()) finishAt.set(id, simNow)
+      if (e.kind === 'agent.finish')
+        finishAt.set(e.agentId, { at: simNow, budget: REPORT_LEAVE_BUDGET_MS })
+      if (e.kind === 'session.end')
+        for (const id of relevant.keys()) {
+          const prev = finishAt.get(id)
+          // 이미 보고 후 머무는 중이면 조명 끄기와 함께 서두른다 → 세션 종료 기준 LEAVE_BUDGET_MS
+          if (prev === undefined || simNow + LEAVE_BUDGET_MS < prev.at + prev.budget)
+            finishAt.set(id, { at: simNow, budget: LEAVE_BUDGET_MS })
+        }
       store.applyMessage({ type: 'event', event: e })
     }
     simNow = t
@@ -156,8 +173,9 @@ function simulate(frameMs: number): SimResult {
       const id = ch.agentId
       // 퇴장 시간 초과
       const fin = finishAt.get(id)
-      if (fin !== undefined && t - fin > LEAVE_BUDGET_MS)
-        violations.push(`t=${t} ${id}: 퇴장 후 ${t - fin}ms 동안 남아 있음`)
+      if (fin !== undefined && id !== 'main') subLingerMs = Math.max(subLingerMs, t - fin.at)
+      if (fin !== undefined && t - fin.at > fin.budget)
+        violations.push(`t=${t} ${id}: 퇴장 후 ${t - fin.at}ms 동안 남아 있음`)
       // 지연: 아직 반영 안 된 가장 오래된 관련 이벤트
       const list = relevant.get(id) ?? []
       const idx = list.findIndex((r) => r.id === ch.lastCause)
@@ -216,6 +234,7 @@ function simulate(frameMs: number): SimResult {
     lightsOffAt,
     visibleAtLightsOff,
     sessionEndAt: endAt,
+    subLingerMs,
   }
 }
 
@@ -243,6 +262,11 @@ describe('1배속 샘플 세션 시뮬레이션 (씬 = 서버 상태의 투영)'
         expect(r.visibleAtLightsOff).toBe(0)
         expect((r.lightsOffAt ?? 0) - r.sessionEndAt).toBeGreaterThan(0)
         expect((r.lightsOffAt ?? 0) - r.sessionEndAt).toBeLessThanOrEqual(LEAVE_BUDGET_MS)
+      })
+
+      it('agent.finish 후 서브가 보고하고 3초 넘게 머문 뒤 사라진다', () => {
+        expect(r.subLingerMs).toBeGreaterThanOrEqual(3400)
+        expect(r.subLingerMs).toBeLessThanOrEqual(REPORT_LEAVE_BUDGET_MS)
       })
 
       it('session.end 후 캐릭터 0명, 모든 뷰 제거', () => {

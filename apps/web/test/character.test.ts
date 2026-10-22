@@ -12,7 +12,9 @@ import {
   FADE_MS,
   LEAVE_MAX_MS,
   LEAVE_PREP_MS,
+  LEAVE_REPORT_MAX_MS,
   LEAVE_WALK_MS,
+  REPORT_LINGER_MS,
 } from '../src/scene/Character'
 import { CommandQueue, MAX_QUEUE, type QueuedCommand } from '../src/scene/commandQueue'
 import type { CharacterCommand } from '../src/scene/commands'
@@ -291,6 +293,116 @@ describe('퇴근(세션 종료) 퇴장', () => {
     c.update(16)
     expect(view.anim).toBe('report')
     expect(c.dir).toBe('right') // 자료실 캐비닛 → 업무 공간 창가 책상은 오른쪽
+  })
+
+  it('보고(report) 퇴장: 보고 0.4초 → 그 자리에 3초 머묾 → 문으로, 대사는 사라질 때까지 보인다', () => {
+    const view = new FakeView()
+    const c = new Character('a', view)
+    c.enqueue({ ...place('cabinet'), agentId: 'a' })
+    c.update(16)
+    const here = { ...view.pos }
+    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    let t = 0
+    let lingerMs = 0
+    let shown = 0
+    let leftAt: number | null = null
+    while (!c.isGone && t < 10_000) {
+      c.update(16)
+      t += 16
+      if (view.anim === 'idle_stand') {
+        lingerMs += 16
+        expect(view.pos).toEqual(here) // 머무는 동안 제자리
+        expect(c.dir).toBe('right') // 팀장 쪽을 본 채
+      }
+      if (leftAt === null && (view.pos.x !== here.x || view.pos.y !== here.y)) leftAt = t
+      if (view.bubble === '다녀왔습니다!' && view.alpha > 0) shown += 16
+    }
+    expect(c.isGone).toBe(true)
+    expect(lingerMs).toBeGreaterThanOrEqual(REPORT_LINGER_MS - 16)
+    expect(lingerMs).toBeLessThanOrEqual(REPORT_LINGER_MS + 32)
+    expect(leftAt ?? 0).toBeGreaterThanOrEqual(LEAVE_PREP_MS + REPORT_LINGER_MS)
+    expect(t).toBeGreaterThan(LEAVE_PREP_MS + REPORT_LINGER_MS + LEAVE_WALK_MS)
+    expect(t).toBeLessThanOrEqual(LEAVE_REPORT_MAX_MS)
+    expect(LEAVE_PREP_MS + REPORT_LINGER_MS + LEAVE_WALK_MS + FADE_MS).toBeLessThan(
+      LEAVE_REPORT_MAX_MS,
+    )
+    // 퇴장 대사는 사라질 때까지(1.5초 규칙 대상 아님) — 머묾 내내 보인다
+    expect(shown).toBeGreaterThanOrEqual(LEAVE_PREP_MS + REPORT_LINGER_MS + LEAVE_WALK_MS)
+  })
+
+  it('보고 퇴장: 1fps(큰 dt) 여도 LEAVE_REPORT_MAX_MS 안에 사라진다', () => {
+    const c = new Character('a', new FakeView())
+    c.enqueue({ ...place('desk1'), agentId: 'a' })
+    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    let t = 0
+    while (!c.isGone && t < 10_000) {
+      c.update(1000)
+      t += 1000
+    }
+    expect(c.isGone).toBe(true)
+    expect(t).toBeLessThanOrEqual(LEAVE_REPORT_MAX_MS)
+  })
+
+  it('hurryLeave: 머무는 중이면 바로 문으로 나가 LEAVE_MAX_MS 안에 사라진다', () => {
+    const view = new FakeView()
+    const c = new Character('a', view)
+    c.enqueue({ ...place('desk1'), agentId: 'a' })
+    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    runFor(c, 1000)
+    expect(view.anim).toBe('idle_stand')
+    c.hurryLeave()
+    let t = 0
+    while (!c.isGone && t < 10_000) {
+      c.update(16)
+      t += 16
+    }
+    expect(t).toBeLessThanOrEqual(LEAVE_MAX_MS)
+  })
+
+  it('Roster: 보고 후 머무는 서브가 있어도 세션 종료 조명 끄기는 약 2초 안', () => {
+    const lights: boolean[] = []
+    const roster = new Roster(
+      () => new FakeView(),
+      (cmd) => {
+        if (cmd.type === 'lights') lights.push(cmd.on)
+      },
+    )
+    roster.dispatch([
+      { type: 'lights', on: true, cause: 's' },
+      place('mainDesk'),
+      { ...place('desk1'), agentId: 'a' },
+    ])
+    roster.dispatch([
+      { type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' },
+    ])
+    for (let i = 0; i < 10; i++) roster.update(50) // 0.5초: 머무는 중
+    expect(roster.departing).toHaveLength(1)
+    roster.dispatch([
+      { type: 'lights', on: false, cause: 'end' },
+      { type: 'leave', agentId: 'main', cause: 'end', say: '퇴근하겠습니다!', style: 'pack' },
+    ])
+    let t = 0
+    while (roster.visibleCount > 0 && t < 10_000) {
+      roster.update(50)
+      t += 50
+    }
+    expect(t).toBeLessThanOrEqual(LEAVE_MAX_MS)
+    expect(lights).toEqual([true, false])
+  })
+
+  it('Roster: 머무는 중 재접속(resync)이면 즉시 사라진다', () => {
+    const roster = new Roster(
+      () => new FakeView(),
+      () => {},
+    )
+    roster.dispatch([{ ...place('desk1'), agentId: 'a' }])
+    roster.dispatch([
+      { type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' },
+    ])
+    roster.update(1000)
+    expect(roster.visibleCount).toBe(1)
+    roster.clearDeparting()
+    expect(roster.visibleCount).toBe(0)
   })
 
   it('Roster: 조명 끄기는 퇴장 중인 마지막 사람이 사라질 때까지 미룬다', () => {
