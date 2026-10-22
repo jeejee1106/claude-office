@@ -1,21 +1,27 @@
 import { MAIN_AGENT_ID } from '@claude-office/shared'
+import { useMemo } from 'react'
 import { t } from '../i18n'
+import { eventsOnFloor } from '../store/floors'
+import { currentFloor } from '../store/officeStore'
 import { describeEvent, formatTime } from './describe'
 import { useLang } from './LangToggle'
 import { useOfficeStore, useStoreSelector } from './useStore'
 
-/** 최근 이벤트(최신이 위). 클릭하면 해당 캐릭터를 하이라이트한다 */
+/** 최근 이벤트(최신이 위). 현재 층의 것만 보여 준다. 클릭하면 해당 캐릭터를 하이라이트한다 */
 export function Timeline() {
   const store = useOfficeStore()
   const lang = useLang()
   const recent = useStoreSelector((s) => s.recent)
+  const office = useStoreSelector((s) => s.office)
+  const floor = useStoreSelector(currentFloor)
   const highlight = useStoreSelector((s) => s.highlightAgentId)
-  const items = [...recent].reverse()
+  const onFloor = useMemo(() => eventsOnFloor(office, recent, floor), [office, recent, floor])
+  const items = [...onFloor].reverse()
 
   return (
     <section className="panel timeline">
       <h2>
-        {t('recent', lang)} ({recent.length})
+        {t('recent', lang)} ({onFloor.length})
       </h2>
       <ol>
         {items.map((e) => (

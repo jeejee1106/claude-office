@@ -52,7 +52,7 @@ body {
   margin: 0;
   font: 700 16px var(--pixel-font);
   color: var(--accent);
-  margin-right: auto;
+  flex-shrink: 0;
 }
 
 .badge {
@@ -86,6 +86,76 @@ body {
 }
 .session-empty {
   color: var(--muted);
+  margin-right: auto;
+}
+
+/* 층 탭 (기획서 7절 "층(여러 프로젝트)") */
+.floor-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+.floor-tab {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid #3a3f6b;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+.floor-tab.current {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.floor-tab.ended {
+  opacity: 0.45;
+}
+.floor-tab .floor-name {
+  position: relative;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  background: var(--err);
+  flex-shrink: 0;
+}
+.floor-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: floor-blink 1.2s steps(1, end) 1;
+}
+@keyframes floor-blink {
+  0%,
+  50% {
+    opacity: 0.35;
+  }
+  25%,
+  75%,
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .floor-flash {
+    animation-duration: 2.4s;
+    animation-timing-function: linear;
+  }
 }
 
 .layout {
