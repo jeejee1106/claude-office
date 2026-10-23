@@ -309,8 +309,9 @@ export class Character {
         break
       }
       case 'act':
-        // 제자리 행동(오류 직후·손 들기) 중에는 진행 중인 도구가 없다 → 도구 말풍선 끔
-        this.showTool(null)
+        // 제자리 행동(오류 직후·손 들기) 중에는 진행 중인 도구가 없다 → 도구 말풍선 끔.
+        // brief 도구(전화 걸기)는 도구가 진행 중이므로 그 말풍선을 유지한다
+        this.showTool(cmd.bubble ?? null)
         if (cmd.say) this.say(cmd.say, SPEECH_MS)
         this.view.setEffect(null)
         this.view.setAnimation(cmd.anim, this.dir)

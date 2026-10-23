@@ -14,7 +14,7 @@ import {
   TILE,
 } from '../layout'
 import type { TeamId } from '../teams'
-import { animKey, type CharacterAtlas, pickFrame } from './characterSheet'
+import { animKey, type CharacterAtlas, pickFrame, resolveAnim } from './characterSheet'
 import {
   DEFAULT_SIGN,
   OFFICE_FRAMES,
@@ -132,7 +132,7 @@ export const VARIANT_COLORS: readonly (readonly [number, number])[] = [
   [0xc5c9d6, 0xf5c84c], // grayLight / yellow
 ]
 
-const SEATED: ReadonlySet<AnimName> = new Set(['idle_sit', 'sleep'])
+const SEATED: ReadonlySet<AnimName> = new Set(['idle_sit', 'sleep', 'phone_sit'])
 const FRAME_MS = 180
 
 let warned = false
@@ -874,9 +874,12 @@ class PlaceholderCharacterView implements CharacterView {
   private redraw(): void {
     if (this.atlas !== null) {
       const key = animKey(this.variant, this.anim, this.dir)
-      if (pickFrame(this.atlas, this.variant, this.anim, this.dir, 0) !== null) {
+      const resolved = resolveAnim(this.atlas, this.variant, this.anim, this.dir)
+      if (resolved !== null) {
         this.usingSprite = true
         this.sprite.visible = true
+        // 대체 그림(예: 앉아서 전화 = phone 프레임을 앉은 높이로)은 정수 px 만큼 내린다
+        this.sprite.y = resolved.dy
         this.body.clear()
         this.body.visible = false
         this.updateSprite()
@@ -985,6 +988,7 @@ class PlaceholderCharacterView implements CharacterView {
         g.rect(two ? -3 : 1, -12 + sy, 2, 1).fill(C.metalDark)
         break
       case 'phone':
+      case 'phone_sit':
         arm(-5, -14, 6)
         g.rect(4, -21 + sy, 2, 6).fill(C.red)
         break

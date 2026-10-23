@@ -3,14 +3,18 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ANIMATIONS } from '../src/scene/activityMap'
 import {
+  ANIM_FALLBACK,
   animKey,
   type CharacterAtlas,
   DEFAULT_FRAME_MS,
   DIRS,
+  fallbackAnimationKeys,
   frameMsFor,
   missingAnimationKeys,
   parseFrameMs,
   pickFrame,
+  resolveAnim,
+  SIT_DROP_PX,
 } from '../src/scene/render/characterSheet'
 import { VARIANT_COUNT } from '../src/scene/variant'
 
@@ -39,6 +43,27 @@ describe('characterSheet 조회', () => {
   it('없는 키는 null (플레이스홀더로 떨어짐)', () => {
     expect(pickFrame(atlas, 2, 'walk', 'right', 0)).toBeNull()
     expect(pickFrame(atlas, 5, 'walk', 'left', 0)).toBeNull()
+  })
+
+  it('앉아서 전화(phone_sit): 프레임이 없으면 phone 프레임을 SIT_DROP_PX 내려 그린다', () => {
+    const a: CharacterAtlas<string> = {
+      animations: { char_1_phone_down: ['p0', 'p1'] },
+      frameMs: { phone: 300 },
+    }
+    expect(resolveAnim(a, 1, 'phone_sit', 'down')).toEqual({ anim: 'phone', dy: SIT_DROP_PX })
+    expect(SIT_DROP_PX).toBe(2)
+    expect(pickFrame(a, 1, 'phone_sit', 'down', 0)).toBe('p0')
+    expect(pickFrame(a, 1, 'phone_sit', 'down', 300)).toBe('p1')
+    expect(pickFrame(a, 1, 'phone_sit', 'up', 0)).toBeNull()
+    expect(missingAnimationKeys(a.animations, 2)).not.toContain('char_1_phone_sit_down')
+    expect(fallbackAnimationKeys(a.animations, 2)).toEqual(['char_1_phone_sit_down'])
+    // 아티스트가 진짜 앉은 전화 프레임을 넣으면 그쪽을 오프셋 없이 쓴다
+    const drawn: CharacterAtlas<string> = {
+      animations: { char_1_phone_down: ['p0'], char_1_phone_sit_down: ['s0'] },
+      frameMs: {},
+    }
+    expect(resolveAnim(drawn, 1, 'phone_sit', 'down')).toEqual({ anim: 'phone_sit', dy: 0 })
+    expect(pickFrame(drawn, 1, 'phone_sit', 'down', 0)).toBe('s0')
   })
 
   it('parseFrameMs: 잘못된 값은 버린다', () => {
@@ -71,9 +96,13 @@ describe('실제 아틀라스 apps/web/public/assets/characters.json', () => {
     }
   })
 
-  it('모든 동작의 frameMs 가 있다', () => {
+  it('모든 동작의 frameMs 가 있다(대체 그림으로 그리는 동작은 대체 동작의 frameMs)', () => {
     const ms = parseFrameMs(json.meta)
-    for (const a of ANIMATIONS) expect(ms[a]).toBeGreaterThan(0)
+    const keys = new Set(fallbackAnimationKeys(json.animations, VARIANT_COUNT))
+    for (const a of ANIMATIONS) {
+      const viaFallback = keys.has(animKey(0, a, 'down'))
+      expect(ms[viaFallback ? (ANIM_FALLBACK[a]?.anim ?? a) : a], a).toBeGreaterThan(0)
+    }
     expect(json.meta.image).toBe('characters.png')
   })
 

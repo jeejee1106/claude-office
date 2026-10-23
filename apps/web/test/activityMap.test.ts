@@ -59,11 +59,19 @@ describe('activityMap', () => {
     expect(TOOL_ACTIVITY.search.bubble({ name: 'Grep', target: 'login' })).toBe('🔍 login')
     expect(TOOL_ACTIVITY.bash.bubble({ name: 'Bash', target: 'pnpm test' })).toBe('>_ pnpm')
     expect(TOOL_ACTIVITY.web.bubble({ name: 'WebSearch' })).toBe('🌐')
-    expect(TOOL_ACTIVITY.agent.bubble({ name: 'Agent', target: 'Explore' })).toBe('👋 Explore')
+    expect(TOOL_ACTIVITY.agent.bubble({ name: 'Agent', target: 'Explore' })).toBe('📞 Explore')
+    expect(TOOL_ACTIVITY.agent.bubble({ name: 'Agent' })).toBe('📞')
     expect(TOOL_ACTIVITY.plan.bubble({ name: 'TodoWrite' })).toBe('📋')
     expect(TOOL_ACTIVITY.mcp.bubble({ name: 'mcp__github__create_pr' })).toBe('☎️ github')
     expect(TOOL_ACTIVITY.other.bubble({ name: 'Mystery' })).toBeNull()
     expect(TOOL_ACTIVITY.write.effect).toBe('paper')
+  })
+
+  it('서브에이전트 호출(agent)은 자기 자리에 앉은 채 잠깐 전화(brief), 나머지 도구는 brief 아님', () => {
+    expect(TOOL_ACTIVITY.agent).toMatchObject({ spot: 'ownDesk', anim: 'phone_sit', brief: true })
+    for (const c of TOOL_CATEGORIES) {
+      if (c !== 'agent') expect(TOOL_ACTIVITY[c].brief, c).toBeUndefined()
+    }
   })
 
   it('agent.idle + isAsleep 은 자기 책상 sleep + Zzz', () => {

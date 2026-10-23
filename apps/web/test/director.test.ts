@@ -46,12 +46,14 @@ describe('director × fixtures/sample-session.jsonl', () => {
       .filter((c) =>
         ['tool.start', 'turn.end', 'context.compact'].includes(kindOf.get(c.cause) ?? ''),
       )
+      // brief 도구(전화)의 자기 책상 복귀(soft)는 빼고 본다
+      .filter((c) => c.type === 'moveTo' && !c.soft)
       .map((c) => (c.type === 'moveTo' ? c.spot : ''))
     expect(spots).toEqual([
       'cabinet',
       'bookshelf',
       'whiteboard',
-      'door',
+      'mainDesk', // e09 Agent: 문 앞이 아니라 자기 책상에서 전화
       'mainDesk',
       'serverTerminal',
       'globe',
@@ -97,6 +99,63 @@ describe('director × fixtures/sample-session.jsonl', () => {
       spot: 'research1',
     })
     expect(sub[0]).toMatchObject({ variant: variantFor('sub-a', 'Explore') })
+  })
+
+  it('e09 팀장 Agent 호출 → 자기 책상에 앉아 전화(📞 Explore) 잠깐 → 같은 자리 idle_sit(soft)', () => {
+    const e09 = (out.find((o) => o.event.id === 'e09')?.cmds ?? []).filter(isCharacterCommand)
+    expect(e09).toEqual([
+      expect.objectContaining({
+        type: 'moveTo',
+        spot: 'mainDesk',
+        anim: 'phone_sit',
+        bubble: '📞 Explore',
+        soft: false,
+      }),
+      expect.objectContaining({
+        type: 'act',
+        anim: 'phone_sit',
+        durationMs: 1500,
+        bubble: '📞 Explore',
+        interruptible: true,
+      }),
+      // 전화를 끊고 하던 자리 동작으로. 서브가 끝날 때(tool.end)까지 말풍선은 유지
+      expect.objectContaining({
+        type: 'moveTo',
+        spot: 'mainDesk',
+        anim: 'idle_sit',
+        bubble: '📞 Explore',
+        soft: true,
+      }),
+    ])
+    expect((e09[1] as { say?: string | null }).say ?? null).toBeNull()
+    // 문 앞 손짓은 더 이상 없다
+    expect(charCmds(all, 'main').some((c) => c.type === 'moveTo' && c.spot === 'door')).toBe(false)
+  })
+
+  it('e09 이후 다시 배치(syncAll)하면 팀장은 자기 책상 idle_sit + 📞 말풍선(이벤트 경로의 최종 모습)', () => {
+    const upTo = events.slice(0, events.findIndex((e) => e.id === 'e09') + 1)
+    const r = run(upTo)
+    const placed = r.director
+      .syncAll(r.state, 'sample')
+      .find((c) => c.type === 'place' && c.agentId === 'main')
+    expect(placed).toMatchObject({ spot: 'mainDesk', anim: 'idle_sit', bubble: '📞 Explore' })
+  })
+
+  it('서브가 Agent 를 쓰면(중첩) 자기 팀 책상에서 같은 전화 동작', () => {
+    const r = run([
+      ev({ id: 'n1', kind: 'session.start' }),
+      ev({ id: 'n2', kind: 'agent.spawn', agentId: 'sub-x', agentType: 'Explore' }),
+      ev({
+        id: 'n3',
+        kind: 'tool.start',
+        agentId: 'sub-x',
+        tool: { name: 'Agent', category: 'agent', target: 'Plan', useId: 'u1' },
+      }),
+    ])
+    const n3 = charCmds(r.all, 'sub-x').filter((c) => c.cause === 'n3')
+    expect(n3[0]).toMatchObject({ type: 'moveTo', spot: 'research1', anim: 'phone_sit' })
+    expect(n3[1]).toMatchObject({ type: 'act', anim: 'phone_sit', bubble: '📞 Plan' })
+    expect(n3[2]).toMatchObject({ type: 'moveTo', spot: 'research1', anim: 'idle_sit', soft: true })
   })
 
   it('e19 attention → raise_hand + 깜빡이는 "?"', () => {

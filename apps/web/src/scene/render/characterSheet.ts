@@ -28,6 +28,37 @@ export function frameMsFor(atlas: CharacterAtlas<unknown>, anim: AnimName): numb
   return typeof ms === 'number' && ms > 0 ? ms : DEFAULT_FRAME_MS
 }
 
+/**
+ * 앉은 자세에서 서 있는 동작 프레임을 쓸 때 내리는 높이(px).
+ * pixel-artist 요약: 앉은 type_down 은 서서 치는 그림보다 상체가 2px 아래이고 idle_sit_down 과 머리 높이가 같다.
+ */
+export const SIT_DROP_PX = 2
+
+/**
+ * 아틀라스에 아직 프레임이 없는 동작의 대체 그림: 다른 동작 프레임을 dy 만큼 내려 그린다.
+ * 아틀라스에 원래 키(char_{v}_{anim}_{dir})가 생기면 그쪽을 쓴다(오프셋 0).
+ */
+export const ANIM_FALLBACK: Readonly<Partial<Record<AnimName, { anim: AnimName; dy: number }>>> = {
+  // 앉아서 전화: 서서 전화하는 phone 을 앉은 높이로. 다리는 책상·의자에 가려진다
+  phone_sit: { anim: 'phone', dy: SIT_DROP_PX },
+}
+
+const hasKey = (atlas: CharacterAtlas<unknown>, key: string): boolean =>
+  (atlas.animations[key]?.length ?? 0) > 0
+
+/** 실제로 그릴 아틀라스 동작과 세로 오프셋. 원래 키도 대체 키도 없으면 null(플레이스홀더) */
+export function resolveAnim(
+  atlas: CharacterAtlas<unknown>,
+  variant: number,
+  anim: AnimName,
+  dir: Dir,
+): { anim: AnimName; dy: number } | null {
+  if (hasKey(atlas, animKey(variant, anim, dir))) return { anim, dy: 0 }
+  const fb = ANIM_FALLBACK[anim]
+  if (fb !== undefined && hasKey(atlas, animKey(variant, fb.anim, dir))) return fb
+  return null
+}
+
 /** 경과 시간(애니메이션 시작부터)에 맞는 프레임. 키가 없으면 null(호출 쪽이 플레이스홀더로 그린다) */
 export function pickFrame<T>(
   atlas: CharacterAtlas<T>,
@@ -36,10 +67,30 @@ export function pickFrame<T>(
   dir: Dir,
   elapsedMs: number,
 ): T | null {
-  const frames = atlas.animations[animKey(variant, anim, dir)]
+  const r = resolveAnim(atlas, variant, anim, dir)
+  if (r === null) return null
+  const frames = atlas.animations[animKey(variant, r.anim, dir)]
   if (frames === undefined || frames.length === 0) return null
-  const i = Math.floor(Math.max(elapsedMs, 0) / frameMsFor(atlas, anim)) % frames.length
+  const i = Math.floor(Math.max(elapsedMs, 0) / frameMsFor(atlas, r.anim)) % frames.length
   return frames[i] ?? null
+}
+
+/** 아틀라스에 원래 키가 없어 ANIM_FALLBACK 으로 그리는 키 (pixel-artist 에게 요청할 목록) */
+export function fallbackAnimationKeys(
+  animations: Readonly<Record<string, readonly unknown[] | undefined>>,
+  variantCount: number,
+): string[] {
+  const atlas: CharacterAtlas<unknown> = { animations, frameMs: {} }
+  const out: string[] = []
+  for (let v = 0; v < variantCount; v++) {
+    for (const anim of ANIMATIONS) {
+      for (const dir of DIRS) {
+        const r = resolveAnim(atlas, v, anim, dir)
+        if (r !== null && r.anim !== anim) out.push(animKey(v, anim, dir))
+      }
+    }
+  }
+  return out
 }
 
 /** 아틀라스 meta 의 frameMs 를 안전하게 읽는다(형식이 틀리면 빈 객체 → 기본 간격) */
@@ -54,17 +105,17 @@ export function parseFrameMs(meta: unknown): Record<string, number> {
   return out
 }
 
-/** 씬이 쓸 수 있는 모든 키 중 아틀라스에 없는 것 (로드 직후 1회 경고용) */
+/** 씬이 쓸 수 있는 모든 키 중 그릴 프레임이 없는 것(ANIM_FALLBACK 으로 그릴 수 있으면 제외) (로드 직후 1회 경고용) */
 export function missingAnimationKeys(
   animations: Readonly<Record<string, readonly unknown[] | undefined>>,
   variantCount: number,
 ): string[] {
+  const atlas: CharacterAtlas<unknown> = { animations, frameMs: {} }
   const missing: string[] = []
   for (let v = 0; v < variantCount; v++) {
     for (const anim of ANIMATIONS) {
       for (const dir of DIRS) {
-        const key = animKey(v, anim, dir)
-        if ((animations[key]?.length ?? 0) === 0) missing.push(key)
+        if (resolveAnim(atlas, v, anim, dir) === null) missing.push(animKey(v, anim, dir))
       }
     }
   }

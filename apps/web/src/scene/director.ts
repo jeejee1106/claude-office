@@ -9,6 +9,7 @@ import {
 import { getLang, type Lang, type LineKey, pickLine } from '../i18n'
 import {
   type AnimName,
+  BRIEF_TOOL_MS,
   type Effect,
   errorReaction,
   type KindActivity,
@@ -232,12 +233,23 @@ export class Director {
       case 'tool': {
         if (e.kind !== 'tool.start') break
         const ta = toolActivity(e.tool.category)
-        out.push(
-          this.moveCmd(info, ta.spot, ta.anim, cause, {
-            bubble: ta.bubble(e.tool),
-            effect: ta.effect ?? null,
-          }),
-        )
+        const bubble = ta.bubble(e.tool)
+        out.push(this.moveCmd(info, ta.spot, ta.anim, cause, { bubble, effect: ta.effect ?? null }))
+        if (ta.brief === true) {
+          // 잠깐 행동(전화 걸기): 그 자리에서 BRIEF_TOOL_MS 동안 → 자기 책상 idle_sit(soft).
+          // 도구는 서버에서 아직 진행 중(Agent 는 서브가 끝나야 tool.end)이므로 말풍선은 tool.end 까지 유지.
+          // 뒤에 다른 도구 명령이 오면 바로 끊긴다(interruptible).
+          out.push({
+            type: 'act',
+            agentId: info.agentId,
+            cause,
+            anim: ta.anim,
+            durationMs: BRIEF_TOOL_MS,
+            bubble,
+            interruptible: true,
+          })
+          out.push(this.moveCmd(info, 'ownDesk', 'idle_sit', cause, { bubble, soft: true }))
+        }
         break
       }
       case 'enter':
@@ -332,6 +344,15 @@ export class Director {
     }
     if (agent.currentTool !== undefined) {
       const ta = toolActivity(agent.currentTool.category)
+      // brief 도구(전화 걸기)는 이벤트 경로에서도 잠깐 뒤 자기 책상 idle_sit(말풍선 유지)로 끝나므로 그 최종 모습으로 둔다
+      if (ta.brief === true) {
+        return {
+          spot: 'ownDesk',
+          anim: 'idle_sit',
+          bubble: ta.bubble(agent.currentTool),
+          mark: null,
+        }
+      }
       return { spot: ta.spot, anim: ta.anim, bubble: ta.bubble(agent.currentTool), mark: null }
     }
     if (agent.activity === 'idle' && isAsleep(agent, this.now())) {
