@@ -36,6 +36,10 @@ export const PALETTE = {
   tealDark: '#2f9488',
   pink: '#f59ab5',
   pinkDark: '#d9708f',
+  // 사무실(office 시트): 바닥 타일·간판 판 크림색, 창문 하늘색 (2026-10-23 그림체 샘플 A에서 확정)
+  cream: '#fbefd5',
+  creamShade: '#ecd3a8',
+  sky: '#a9dcf5',
 } as const satisfies Record<string, `#${string}`>
 
 export type ColorName = keyof typeof PALETTE

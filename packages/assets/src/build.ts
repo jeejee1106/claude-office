@@ -1,29 +1,42 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { encodePng } from './canvas'
+import { encodePng, type PixelImage } from './canvas'
+import { packOffice } from './officeSheet'
 import { OUTPUT_DIR } from './paths'
 import { buildCharacterSheet, packSheet } from './sheet'
 import { assertPalette, offPalettePixels } from './validate'
 
 /*
  * 모든 시트를 그려 apps/web/public/assets/{sheet}.png + {sheet}.json 으로 쓴다.
- * 이번 범위: characters 시트만 (가구·바닥·벽은 다음 작업).
+ *   characters: 캐릭터 8변형 × 행동 × 4방향
+ *   office:     업무 공간 바닥·벽·칸막이 타일, 책상·의자, 팀 간판 3조각, 소품
  * 실행: pnpm --filter @claude-office/assets build
  */
 
 assertPalette()
 mkdirSync(OUTPUT_DIR, { recursive: true })
 
-const sheet = buildCharacterSheet()
-const { image, atlas } = packSheet(sheet, 'characters.png')
-const bad = offPalettePixels(image)
-if (bad.length > 0) {
-  console.error(`characters: ${bad.length}+ pixels outside the palette:\n  ${bad.join('\n  ')}`)
-  process.exit(1)
+function write(sheet: string, image: PixelImage, atlas: unknown): void {
+  const bad = offPalettePixels(image)
+  if (bad.length > 0) {
+    console.error(`${sheet}: ${bad.length}+ pixels outside the palette:\n  ${bad.join('\n  ')}`)
+    process.exit(1)
+  }
+  writeFileSync(resolve(OUTPUT_DIR, `${sheet}.png`), encodePng(image))
+  writeFileSync(resolve(OUTPUT_DIR, `${sheet}.json`), `${JSON.stringify(atlas, null, 2)}\n`)
 }
-writeFileSync(resolve(OUTPUT_DIR, 'characters.png'), encodePng(image))
-writeFileSync(resolve(OUTPUT_DIR, 'characters.json'), `${JSON.stringify(atlas, null, 2)}\n`)
+
+const chars = buildCharacterSheet()
+const packedChars = packSheet(chars, 'characters.png')
+write('characters', packedChars.image, packedChars.atlas)
 console.log(
-  `characters: ${sheet.frames.length} frames, ${Object.keys(sheet.animations).length} animations, ` +
-    `${image.width}x${image.height}px -> ${OUTPUT_DIR}`,
+  `characters: ${chars.frames.length} frames, ${Object.keys(chars.animations).length} animations, ` +
+    `${packedChars.image.width}x${packedChars.image.height}px -> ${OUTPUT_DIR}`,
+)
+
+const office = packOffice()
+write('office', office.image, office.atlas)
+console.log(
+  `office: ${Object.keys(office.atlas.frames).length} frames, ` +
+    `${office.image.width}x${office.image.height}px -> ${OUTPUT_DIR}`,
 )

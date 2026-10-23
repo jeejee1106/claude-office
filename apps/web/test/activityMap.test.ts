@@ -149,7 +149,7 @@ describe('대사 사전 (기획서 5·6절)', () => {
     sessionStart: '출근했습니다!',
     promptSubmit: '네, 알겠습니다!',
     subSpawn: '부르셨어요?',
-    subFinish: '다녀왔습니다!',
+    subFinish: '퇴근하겠습니다!',
     error: '앗…',
     errorRepeated: '이상하다…',
     attention: '확인 부탁드려요!',

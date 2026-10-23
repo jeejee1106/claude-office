@@ -1,4 +1,5 @@
-import { Container, Graphics, Sprite, type Texture } from 'pixi.js'
+import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js'
+import { subscribeLang, teamName } from '../../i18n'
 import type { AnimName, Effect, Mark } from '../activityMap'
 import {
   BASE_HEIGHT,
@@ -12,7 +13,19 @@ import {
   ROWS,
   TILE,
 } from '../layout'
+import type { TeamId } from '../teams'
 import { animKey, type CharacterAtlas, pickFrame } from './characterSheet'
+import {
+  DEFAULT_SIGN,
+  OFFICE_FRAMES,
+  type Placement,
+  placementOf,
+  type SignGeometry,
+  signMids,
+  signTextBox,
+  wallDecor,
+  workAreaTiles,
+} from './officeSheet'
 import type { CharacterView, SceneRenderer } from './types'
 
 /*
@@ -73,7 +86,36 @@ const C = {
   // 캐릭터 아틀라스 팔레트(packages/assets/src/palette.ts)의 가방 색 — pack 포즈의 가방과 같은 색
   bagBody: 0xb5703f,
   bagShade: 0x8a4f2c,
+  chair: 0x4b4470,
+  chairDark: 0x332e52,
+  // office 시트 팔레트 cream / brownDark (간판 글자판·글자)
+  signPanel: 0xfbefd5,
+  signText: 0x4a2c20,
 } as const
+
+/**
+ * 간판 글자(PixiJS Text). 기준 해상도 px(한글은 9px 아래로 내리면 뭉개진다 — pixel-artist 권장 9~10).
+ * 텍스트 해상도 = 씬 정수 배율로 다시 그려 화면 픽셀 1:1 로 선명하다.
+ */
+const SIGN_FONT_SIZE = 9
+const SIGN_FONT_MIN = 7
+const SIGN_FONT = '"Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif'
+
+/** office 아틀라스(업무 공간 바닥·벽·가구). 없거나 프레임이 빠지면 그 조각만 코드로 그린다 */
+export interface OfficeAtlas<T> {
+  readonly textures: Readonly<Record<string, T | undefined>>
+  readonly sign: SignGeometry
+}
+
+interface SignLabel {
+  team: TeamId
+  text: Text
+  /** 판 안쪽(글자 영역) 기준 해상도 px */
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
 /**
  * variant 별 (셔츠, 머리) — 0 은 메인 고정. 아틀라스가 없을 때도 같은 사람이 같은 색으로 보이도록
@@ -117,18 +159,25 @@ export class PlaceholderRenderer implements SceneRenderer {
   private serverBusy = false
   private racks: readonly Prop[] = []
   private readonly views = new Set<PlaceholderCharacterView>()
+  /** 캐릭터 층에 깊이 정렬로 섞여 그려지는 가구(팀장 책상·직원 의자) */
+  private readonly frontProps: Container[] = []
+  private readonly signs: SignLabel[] = []
+  private readonly unsubLang: () => void
 
   private readonly atlas: CharacterAtlas<Texture> | null
+  private readonly office: OfficeAtlas<Texture> | null
 
-  /** atlas 가 null 이면(로드 실패) 캐릭터도 코드로 그린 도형으로 그린다 */
+  /** atlas 가 null 이면(로드 실패) 캐릭터도 코드로 그린 도형으로 그린다. office 도 같다(업무 공간 가구) */
   constructor(
     layers: PlaceholderLayers,
     domOverlay: HTMLElement,
     atlas: CharacterAtlas<Texture> | null = null,
+    office: OfficeAtlas<Texture> | null = null,
   ) {
     this.layers = layers
     this.dom = domOverlay
     this.atlas = atlas
+    this.office = office
     if (!warned && atlas === null) {
       warned = true
       console.warn(
@@ -138,6 +187,7 @@ export class PlaceholderRenderer implements SceneRenderer {
     this.dimmer.rect(0, 0, BASE_WIDTH, BASE_HEIGHT).fill(0x0b0d1a)
     this.dimmer.alpha = this.dimAlpha
     layers.lighting.addChild(this.dimmer)
+    this.unsubLang = subscribeLang(() => this.refreshSigns())
   }
 
   drawRoom(props: readonly Prop[]): void {
@@ -185,9 +235,35 @@ export class PlaceholderRenderer implements SceneRenderer {
       g.rect(x + TILE - 3, y - 3, 2, 3).fill(C.woodDark)
     }
     this.layers.floor.addChild(g)
+    // 업무 공간 바닥·뒤 벽·칸막이: office 시트 타일(빠진 프레임은 위의 코드 그림이 그대로 보인다)
+    if (this.office !== null) {
+      const tiles = new Container()
+      for (const t of workAreaTiles()) {
+        const tex = this.tex(t.frame)
+        if (tex === null) continue
+        const sp = new Sprite(tex)
+        sp.anchor.set(0, 0)
+        sp.position.set(t.col * TILE, t.row * TILE)
+        tiles.addChild(sp)
+      }
+      this.layers.floor.addChild(tiles)
+    }
 
     const f = new Graphics()
-    for (const p of props) drawProp(f, p)
+    for (const p of props) {
+      const at = placementOf(p)
+      if (at !== null) {
+        // 업무 공간 가구: 캐릭터 층에서 바닥 접점 y 로 깊이 정렬(팀장 책상은 팀장 앞, 의자는 직원 앞)
+        this.addFront(this.anchoredProp(p, at), at.y)
+        if (p.kind === 'teamSign' && p.team !== undefined) this.addSign(p, p.team, at.y)
+        continue
+      }
+      if (p.kind === 'window' && this.office !== null && this.drawWallDecor(p)) continue
+      // office 시트가 있으면 아래 벽의 문 자리는 열린 출입구(바닥)로 보인다
+      if (p.kind === 'door' && this.office !== null && this.tex(OFFICE_FRAMES.floor[0]) !== null)
+        continue
+      drawProp(f, p)
+    }
     this.layers.furniture.addChild(f)
 
     this.racks = props.filter((p) => p.kind === 'serverRack')
@@ -221,6 +297,104 @@ export class PlaceholderRenderer implements SceneRenderer {
   setScale(scale: number): void {
     this.scale = scale
     for (const v of this.views) v.setScale(scale)
+    // 간판 글자는 화면 픽셀 1:1 로 다시 그린다(정수 배율에서 번지지 않게)
+    for (const s of this.signs) s.text.resolution = scale
+  }
+
+  private tex(name: string): Texture | null {
+    return this.office?.textures[name] ?? null
+  }
+
+  private addFront(obj: Container, sortY: number): void {
+    obj.zIndex = sortY
+    this.layers.characters.addChild(obj)
+    this.frontProps.push(obj)
+  }
+
+  /** 스프라이트 하나(앵커는 시트의 defaultAnchor 가 아니라 명시) */
+  private sprite(name: string, x: number, y: number, ax: number, ay: number): Sprite | null {
+    const t = this.tex(name)
+    if (t === null) return null
+    const sp = new Sprite(t)
+    sp.anchor.set(ax, ay)
+    sp.position.set(Math.round(x), Math.round(y))
+    return sp
+  }
+
+  /** 업무 공간 가구 하나: office 시트에 프레임이 있으면 스프라이트, 없으면 코드 그림 */
+  private anchoredProp(p: Prop, at: Placement): Container {
+    const geo = this.office?.sign ?? DEFAULT_SIGN
+    const single = (name: string, ax: number, ay: number): Container | null =>
+      this.sprite(name, at.x, at.y, ax, ay)
+    let obj: Container | null = null
+    switch (p.kind) {
+      case 'desk':
+        obj = single(OFFICE_FRAMES.desk, 0.5, 1)
+        break
+      case 'chair':
+        obj = single(OFFICE_FRAMES.chair, 0.5, 1)
+        break
+      case 'mainDesk':
+        obj = single(OFFICE_FRAMES.bossDesk, 0.5, 1)
+        break
+      case 'mainChair':
+        obj = single(OFFICE_FRAMES.bossChair, 0.5, 1)
+        break
+      case 'plant':
+        obj = single(OFFICE_FRAMES.plant, 0.5, 1)
+        break
+      case 'teamSign': {
+        const mids = signMids(p, geo)
+        const names = [
+          OFFICE_FRAMES.signLeft,
+          ...Array.from({ length: mids }, () => OFFICE_FRAMES.signMid),
+          OFFICE_FRAMES.signRight,
+        ]
+        const parts = names.map((n, i) => this.sprite(n, at.x + geo.pieceW * i, at.y, 0, 1))
+        if (parts.every((s) => s !== null)) {
+          obj = new Container()
+          for (const s of parts) if (s !== null) obj.addChild(s)
+        }
+        break
+      }
+      default:
+        break
+    }
+    if (obj !== null) return obj
+    const g = new Graphics()
+    drawAnchored(g, p, at, geo)
+    return g
+  }
+
+  /** 뒤 벽 창문·게시판(시트). 하나라도 빠지면 false → 코드로 그린 창문 */
+  private drawWallDecor(p: Prop): boolean {
+    const parts = wallDecor(p).map((d) => this.sprite(d.frame, d.x, d.y, 0.5, 1))
+    if (parts.some((s) => s === null)) return false
+    for (const s of parts) if (s !== null) this.layers.furniture.addChild(s)
+    return true
+  }
+
+  /** 팀 간판 글자(i18n 사전, 언어가 바뀌면 다시 씀). 간판 바로 위 깊이 */
+  private addSign(p: Prop, team: TeamId, sortY: number): void {
+    const geo = this.office?.sign ?? DEFAULT_SIGN
+    const text = new Text({
+      text: '',
+      resolution: this.scale,
+      style: {
+        fontFamily: SIGN_FONT,
+        fontSize: SIGN_FONT_SIZE,
+        fontWeight: '700',
+        fill: C.signText,
+      },
+    })
+    const label: SignLabel = { team, text, ...signTextBox(p, geo) }
+    this.signs.push(label)
+    this.addFront(text, sortY + 0.5)
+    layoutSign(label)
+  }
+
+  private refreshSigns(): void {
+    for (const s of this.signs) layoutSign(s)
   }
 
   tick(dtMs: number): void {
@@ -256,7 +430,10 @@ export class PlaceholderRenderer implements SceneRenderer {
   }
 
   destroy(): void {
+    this.unsubLang()
     for (const v of [...this.views]) v.destroy()
+    for (const c of this.frontProps.splice(0)) c.destroy()
+    this.signs.length = 0
     for (const c of this.layers.floor.removeChildren()) c.destroy()
     for (const c of this.layers.furniture.removeChildren()) c.destroy()
     for (const c of this.layers.lighting.removeChildren()) c.destroy()
@@ -266,6 +443,19 @@ export class PlaceholderRenderer implements SceneRenderer {
 // ---------------------------------------------------------------------------
 // 바닥·가구
 // ---------------------------------------------------------------------------
+
+/** 간판 글자를 판 가운데에 정수 좌표로 놓는다. 판보다 넓으면 글자 크기를 줄인다 */
+function layoutSign(s: SignLabel): void {
+  s.text.text = teamName(s.team)
+  let size = SIGN_FONT_SIZE
+  s.text.style.fontSize = size
+  while (s.text.width > s.w && size > SIGN_FONT_MIN) {
+    size--
+    s.text.style.fontSize = size
+  }
+  s.text.x = Math.round(s.x + (s.w - s.text.width) / 2)
+  s.text.y = Math.round(s.y + (s.h - s.text.height) / 2)
+}
 
 function drawFloorTile(g: Graphics, kind: (typeof ROOMS)[number]['floor'], c: number, r: number) {
   const x = c * TILE
@@ -301,6 +491,75 @@ function drawFloorTile(g: Graphics, kind: (typeof ROOMS)[number]['floor'], c: nu
   }
 }
 
+/**
+ * office 시트가 없을 때 업무 공간 가구를 코드로 그린다. 시트와 같은 앵커·크기(at = 바닥 접점)로 그려
+ * 깊이 정렬·캐릭터와의 겹침이 스프라이트일 때와 같다.
+ */
+function drawAnchored(g: Graphics, p: Prop, at: Placement, geo: SignGeometry): void {
+  const { x, y } = at
+  switch (p.kind) {
+    case 'desk':
+      // 직원 책상 32×32: 윗면 x −15..+14, 모니터 화면이 보임(직원이 아래에 앉아 위를 봄)
+      g.rect(x - 15, y - 15, 30, 13).fill(C.outline)
+      g.rect(x - 14, y - 14, 28, 3).fill(C.woodLight)
+      g.rect(x - 14, y - 11, 28, 8).fill(C.wood)
+      g.rect(x - 14, y - 4, 28, 1).fill(C.woodDark)
+      g.rect(x - 14, y - 2, 2, 2).fill(C.woodDark)
+      g.rect(x + 12, y - 2, 2, 2).fill(C.woodDark)
+      g.rect(x - 9, y - 27, 18, 12).fill(C.outline)
+      g.rect(x - 8, y - 26, 16, 9).fill(C.screen)
+      g.rect(x - 1, y - 16, 2, 2).fill(C.outline)
+      break
+    case 'chair':
+      // 직원 의자 뒷모습 16×16: 앉은 직원 앞에 겹친다
+      g.rect(x - 6, y - 12, 12, 8).fill(C.outline)
+      g.rect(x - 5, y - 11, 10, 6).fill(C.chair)
+      g.rect(x - 5, y - 11, 10, 1).fill(C.chairDark)
+      g.rect(x - 1, y - 4, 2, 2).fill(C.outline)
+      g.rect(x - 5, y - 2, 10, 2).fill(C.metalDark)
+      break
+    case 'mainDesk':
+      // 팀장 큰 책상 48×32: 팀장 하체 앞. 모니터는 왼쪽 구석(뒷면)이라 얼굴이 보인다
+      g.rect(x - 24, y - 18, 48, 18).fill(C.outline)
+      g.rect(x - 23, y - 17, 46, 4).fill(C.woodLight)
+      g.rect(x - 23, y - 13, 46, 10).fill(C.wood)
+      g.rect(x - 20, y - 11, 12, 6).fill(C.woodDark)
+      g.rect(x + 8, y - 11, 12, 6).fill(C.woodDark)
+      g.rect(x - 3, y - 9, 6, 2).fill(C.yellow)
+      g.rect(x - 23, y - 26, 15, 10).fill(C.outline)
+      g.rect(x - 22, y - 25, 13, 8).fill(C.metal)
+      g.rect(x + 11, y - 19, 10, 3).fill(C.white)
+      break
+    case 'mainChair':
+      // 팀장 의자 32×32: 등받이 높음, 팀장 뒤
+      g.rect(x - 9, y - 30, 18, 26).fill(C.outline)
+      g.rect(x - 8, y - 29, 16, 24).fill(C.chair)
+      g.rect(x - 8, y - 29, 16, 2).fill(C.chairDark)
+      g.rect(x - 6, y - 4, 12, 2).fill(C.metalDark)
+      break
+    case 'teamSign': {
+      // 스탠드형 간판: 판(위 0..19) + 양 끝 기둥 + 바닥 받침. 글자는 Text 로 따로 얹는다
+      const w = geo.pieceW * (2 + signMids(p, geo))
+      const top = y - geo.pieceH
+      g.rect(x + 7, top + 19, 2, 11).fill(C.woodDark)
+      g.rect(x + w - 9, top + 19, 2, 11).fill(C.woodDark)
+      g.rect(x + 4, y - 3, 8, 2).fill(C.woodDark)
+      g.rect(x + w - 12, y - 3, 8, 2).fill(C.woodDark)
+      g.rect(x + 2, top + 1, w - 4, 19).fill(C.outline)
+      g.rect(x + 3, top + 2, w - 6, 17).fill(C.wood)
+      g.rect(
+        x + geo.panelInsetX,
+        top + geo.panelTop,
+        w - 2 * geo.panelInsetX,
+        geo.panelHeight,
+      ).fill(C.signPanel)
+      break
+    }
+    default:
+      drawProp(g, p)
+  }
+}
+
 function drawProp(g: Graphics, p: Prop): void {
   const x = p.col * TILE
   const y = p.row * TILE
@@ -313,25 +572,6 @@ function drawProp(g: Graphics, p: Prop): void {
       g.rect(x + 4, y + 6, w - 8, 3).fill(C.glassLight)
       g.rect(x + w / 2 - 1, y + 6, 2, h - 12).fill(C.white)
       break
-    case 'mainDesk':
-    case 'desk': {
-      g.rect(x, y + 2, w, h - 4).fill(C.wood)
-      g.rect(x, y + h - 4, w, 2).fill(C.woodDark)
-      g.rect(x + 1, y + h - 2, 2, 2).fill(C.woodDark)
-      g.rect(x + w - 3, y + h - 2, 2, 2).fill(C.woodDark)
-      // 모니터
-      const mx = x + Math.floor(w / 2) - 5
-      g.rect(mx, y - 7, 10, 8).fill(C.dark)
-      g.rect(mx + 1, y - 6, 8, 5).fill(C.screen)
-      g.rect(mx + 4, y + 1, 2, 2).fill(C.dark)
-      if (p.kind === 'mainDesk') {
-        // 메인 책상: 머그컵 + 화분
-        g.rect(x + 3, y, 3, 3).fill(C.white)
-        g.rect(x + w - 7, y - 4, 4, 4).fill(C.plant)
-        g.rect(x + w - 6, y, 3, 3).fill(C.pot)
-      }
-      break
-    }
     case 'commonTable':
       g.rect(x + 1, y + 3, w - 2, h - 8).fill(C.woodLight)
       g.rect(x + 1, y + h - 5, w - 2, 2).fill(C.woodDark)

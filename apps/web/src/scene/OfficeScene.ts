@@ -15,7 +15,13 @@ import {
   missingAnimationKeys,
   parseFrameMs,
 } from './render/characterSheet'
-import { PlaceholderRenderer } from './render/PlaceholderRenderer'
+import {
+  missingOfficeFrames,
+  OFFICE_ATLAS_URL,
+  OFFICE_FRAME_NAMES,
+  parseSignMeta,
+} from './render/officeSheet'
+import { type OfficeAtlas, PlaceholderRenderer } from './render/PlaceholderRenderer'
 import type { SceneRenderer } from './render/types'
 import { Roster } from './roster'
 import { routeSceneEvent } from './sceneRouting'
@@ -71,7 +77,7 @@ export class OfficeScene {
       backgroundColor: 0x1b1f3b,
     })
     // 캐릭터 아틀라스: 실패해도 null → 플레이스홀더 캐릭터로 그린다(화면이 비지 않게)
-    const atlas = await loadCharacterAtlas()
+    const [atlas, office] = await Promise.all([loadCharacterAtlas(), loadOfficeAtlas()])
     if (this.destroyed) {
       app.destroy(true, { children: true })
       return
@@ -92,7 +98,12 @@ export class OfficeScene {
     const lighting = new Container()
     app.stage.addChild(floor, furniture, characters, lighting)
 
-    const renderer = createRenderer({ floor, furniture, characters, lighting }, overlay, atlas)
+    const renderer = createRenderer(
+      { floor, furniture, characters, lighting },
+      overlay,
+      atlas,
+      office,
+    )
     this.renderer = renderer
     renderer.drawRoom(PROPS)
     this.roster = new Roster(
@@ -214,8 +225,37 @@ function createRenderer(
   layers: ConstructorParameters<typeof PlaceholderRenderer>[0],
   overlay: HTMLElement,
   atlas: CharacterAtlas<Texture> | null,
+  office: OfficeAtlas<Texture> | null,
 ): SceneRenderer {
-  return new PlaceholderRenderer(layers, overlay, atlas)
+  return new PlaceholderRenderer(layers, overlay, atlas, office)
+}
+
+/** office.json(+png) 로드 — 업무 공간 바닥·벽·가구. 실패하면 경고만 남기고 null(코드로 그린다) */
+async function loadOfficeAtlas(): Promise<OfficeAtlas<Texture> | null> {
+  const url = `${import.meta.env.BASE_URL}${OFFICE_ATLAS_URL}`
+  try {
+    const sheet: unknown = await Assets.load(url)
+    if (!(sheet instanceof Spritesheet) || Object.keys(sheet.textures).length === 0) {
+      console.warn(`[claude-office] ${url} 이 office 아틀라스 형식이 아님 — 코드로 그립니다.`)
+      return null
+    }
+    sheet.textureSource.scaleMode = 'nearest'
+    const missing = missingOfficeFrames((n) => sheet.textures[n] !== undefined)
+    if (missing.length > 0) {
+      console.warn(
+        `[claude-office] office 아틀라스에 프레임 ${missing.length}개 없음(예: ${missing[0]}) — 그 조각만 코드로 그립니다.`,
+      )
+    }
+    const textures: Record<string, Texture> = {}
+    for (const n of OFFICE_FRAME_NAMES) {
+      const t = sheet.textures[n]
+      if (t !== undefined) textures[n] = t
+    }
+    return { textures, sign: parseSignMeta(sheet.data.meta) }
+  } catch (err) {
+    console.warn(`[claude-office] office 아틀라스 로드 실패(${url}) — 코드로 그립니다.`, err)
+    return null
+  }
 }
 
 /** characters.json(+png) 로드. 실패·형식 오류면 경고만 남기고 null */

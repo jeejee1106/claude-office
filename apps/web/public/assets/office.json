@@ -1,0 +1,678 @@
+{
+  "frames": {
+    "tile_floor_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_floor_1": {
+      "frame": {
+        "x": 18,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_floor_2": {
+      "frame": {
+        "x": 36,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_wall_top_0": {
+      "frame": {
+        "x": 54,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_wall_0": {
+      "frame": {
+        "x": 72,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_wall_1": {
+      "frame": {
+        "x": 90,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_partition_h_0": {
+      "frame": {
+        "x": 108,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_partition_h_left_0": {
+      "frame": {
+        "x": 126,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_partition_h_right_0": {
+      "frame": {
+        "x": 144,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_partition_h_join_0": {
+      "frame": {
+        "x": 162,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_partition_v_0": {
+      "frame": {
+        "x": 180,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "tile_partition_v_end_0": {
+      "frame": {
+        "x": 198,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "furn_desk": {
+      "frame": {
+        "x": 216,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_desk_down": {
+      "frame": {
+        "x": 0,
+        "y": 34,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_chair": {
+      "frame": {
+        "x": 34,
+        "y": 34,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_desk_boss": {
+      "frame": {
+        "x": 52,
+        "y": 34,
+        "w": 48,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 48,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_chair_boss": {
+      "frame": {
+        "x": 102,
+        "y": 34,
+        "w": 32,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_teamsign_left": {
+      "frame": {
+        "x": 136,
+        "y": 34,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    "furn_teamsign_mid": {
+      "frame": {
+        "x": 154,
+        "y": 34,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    "furn_teamsign_right": {
+      "frame": {
+        "x": 172,
+        "y": 34,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    "furn_plant": {
+      "frame": {
+        "x": 190,
+        "y": 34,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_plant_small": {
+      "frame": {
+        "x": 208,
+        "y": 34,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_mug": {
+      "frame": {
+        "x": 226,
+        "y": 34,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_papers": {
+      "frame": {
+        "x": 0,
+        "y": 68,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_window": {
+      "frame": {
+        "x": 18,
+        "y": 68,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "furn_corkboard": {
+      "frame": {
+        "x": 36,
+        "y": 68,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
+  },
+  "animations": {},
+  "meta": {
+    "app": "@claude-office/assets (generated — do not edit by hand)",
+    "version": "1",
+    "image": "office.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 256,
+      "h": 84
+    },
+    "scale": 1,
+    "tile": 16,
+    "sign": {
+      "pieceW": 16,
+      "pieceH": 32,
+      "panelInsetX": 6,
+      "panelTop": 4,
+      "panelHeight": 12,
+      "textPadX": 2,
+      "boardBottom": 19
+    },
+    "notes": {
+      "tile_floor_0": "업무 공간 바닥(기본)",
+      "tile_floor_1": "바닥 변형(잔무늬)",
+      "tile_floor_2": "바닥 변형(닳은 결)",
+      "tile_wall_top_0": "뒤 벽 윗줄(천장 몰딩 + 벽지)",
+      "tile_wall_0": "뒤 벽 아랫줄(벽지 + 징두리 + 걸레받이)",
+      "tile_wall_1": "뒤 벽 아랫줄 변형(콘센트)",
+      "tile_partition_h_0": "가로 칸막이(이어 붙임)",
+      "tile_partition_h_left_0": "가로 칸막이 왼쪽 끝(오른쪽으로 이어짐)",
+      "tile_partition_h_right_0": "가로 칸막이 오른쪽 끝",
+      "tile_partition_h_join_0": "가로 칸막이 + 위에서 세로 칸막이가 붙는 칸",
+      "tile_partition_v_0": "세로 칸막이(투명 배경, 바닥 위에 겹침)",
+      "tile_partition_v_end_0": "세로 칸막이 아래 끝(마구리)",
+      "furn_desk": "직원 책상(직원이 아래에 앉아 위를 봄, 화면 보임)",
+      "furn_desk_down": "직원 책상 반대 방향(앉은 사람이 아래를 봄, 모니터 뒷면)",
+      "furn_chair": "직원 의자 뒷모습(직원 앞에 겹침)",
+      "furn_desk_boss": "팀장 큰 책상(팀장이 뒤에 앉아 아래를 봄)",
+      "furn_chair_boss": "팀장 의자(등받이 높음, 팀장 뒤)",
+      "furn_teamsign_left": "팀 간판 왼쪽 끝 + 기둥",
+      "furn_teamsign_mid": "팀 간판 가운데(반복)",
+      "furn_teamsign_right": "팀 간판 오른쪽 끝 + 기둥",
+      "furn_plant": "바닥 화분(큰 것)",
+      "furn_plant_small": "책상 위 작은 화분",
+      "furn_mug": "머그(책상 위)",
+      "furn_papers": "서류 더미(책상 위)",
+      "furn_window": "창문(벽에 거는 것)",
+      "furn_corkboard": "게시판(벽에 거는 것)"
+    }
+  }
+}
