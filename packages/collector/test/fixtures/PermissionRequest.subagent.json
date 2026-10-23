@@ -1,0 +1,20 @@
+{
+  "_fixture_source": "capture-shape 2026-10-23 Claude Code 2.1.306 interactive auto mode: key set captured (values not recorded), values synthetic (inside subagent: agent_id + agent_type; no tool_use_id)",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/Users/alice/.claude/projects/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/Users/alice/work/demo-app",
+  "prompt_id": "00000000-0000-4000-8000-0000000000aa",
+  "scratchpad_dir": "/private/tmp/claude-501/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001/scratchpad",
+  "agent_id": "a4d1b0553338ecf74",
+  "agent_type": "hook-integrator",
+  "effort": {
+    "level": "high"
+  },
+  "permission_mode": "auto",
+  "hook_event_name": "PermissionRequest",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "curl -s http://127.0.0.1:7333",
+    "description": "<redacted description>"
+  }
+}

@@ -23,7 +23,8 @@ import { baseName, toolTarget, truncate } from './target'
  *   SubagentStop        → agent.finish   (agentId = agent_id)
  *   Stop                → turn.end
  *   Notification        → attention      (permission_prompt/idle_prompt/입력 요청만)
- *   PermissionRequest   → attention permission
+ *   PermissionRequest   → null. auto mode 분류기가 묻지 않고 허용할 때도 오므로(2026-10-23 캡처)
+ *                         확인 창의 근거로 쓰지 않는다. hook.ts 가 요청한 에이전트만 기억한다.
  *   PreCompact          → context.compact (trigger)
  *   그 밖               → null (보내지 않음)
  *
@@ -40,6 +41,12 @@ export interface NormalizeContext {
   newId: () => string
   /** 프로젝트 디렉터리(CLAUDE_PROJECT_DIR). 없으면 훅 입력의 cwd. basename 만 쓴다. */
   projectDir?: string | undefined
+  /**
+   * Notification(permission_prompt) 에는 agent_id 가 없다(2026-10-23 캡처). 같은 세션에서 가장
+   * 최근에 PermissionRequest 를 보내고 아직 끝나지 않은 에이전트(hook.ts 가 기억)를 넘기면
+   * 그 에이전트에 귀속한다. 없으면 main.
+   */
+  permissionRequester?: string | undefined
 }
 
 type HookInput = Record<string, unknown>
@@ -179,12 +186,17 @@ export function normalize(hookInput: unknown, ctx: NormalizeContext): OfficeEven
       const reason =
         type && Object.hasOwn(NOTIFICATION_REASON, type) ? NOTIFICATION_REASON[type] : undefined
       if (!reason) return null
-      candidate = { ...base, id: ctx.newId(), kind: 'attention', reason }
+      const requester =
+        reason === 'permission' && !subagentId ? str(ctx.permissionRequester) : undefined
+      candidate = {
+        ...base,
+        ...(requester ? { agentId: requester } : {}),
+        id: ctx.newId(),
+        kind: 'attention',
+        reason,
+      }
       break
     }
-    case 'PermissionRequest':
-      candidate = { ...base, id: ctx.newId(), kind: 'attention', reason: 'permission' }
-      break
     case 'PreCompact': {
       const trigger = str(input.trigger)
       candidate = {

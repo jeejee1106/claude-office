@@ -1,9 +1,14 @@
 {
-  "_fixture_source": "docs-derived 2026-10-22 (code.claude.com/docs/en/hooks example; not captured: does not fire in claude -p)",
+  "_fixture_source": "capture-shape 2026-10-23 Claude Code 2.1.306 interactive auto mode: key set captured (values not recorded), values synthetic (main agent; no agent_id, no tool_use_id)",
   "session_id": "00000000-0000-4000-8000-000000000001",
   "transcript_path": "/Users/alice/.claude/projects/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001.jsonl",
   "cwd": "/Users/alice/work/demo-app",
-  "permission_mode": "default",
+  "prompt_id": "00000000-0000-4000-8000-0000000000aa",
+  "scratchpad_dir": "/private/tmp/claude-501/-Users-alice-work-demo-app/00000000-0000-4000-8000-000000000001/scratchpad",
+  "effort": {
+    "level": "high"
+  },
+  "permission_mode": "auto",
   "hook_event_name": "PermissionRequest",
   "tool_name": "Bash",
   "tool_input": {

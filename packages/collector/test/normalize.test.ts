@@ -4,7 +4,12 @@ import { normalize } from '../src/normalize'
 import { fixedContext, fixtureNames, loadFixture } from './helpers'
 
 /** normalize 결과가 null 이어야 하는 fixture (매핑하지 않는 알림 종류) */
-const EXPECT_NULL = new Set(['Notification.auth_success.json'])
+const EXPECT_NULL = new Set([
+  'Notification.auth_success.json',
+  // auto mode 에서 묻지 않고 허용될 때도 온다(2026-10-23 캡처) → 확인 창 근거로 쓰지 않는다
+  'PermissionRequest.json',
+  'PermissionRequest.subagent.json',
+])
 
 describe('normalize: 모든 fixture', () => {
   const names = fixtureNames()
@@ -209,6 +214,28 @@ describe('normalize: 매핑 세부', () => {
       normalize({ ...base, notification_type: 'quota_auto_resume_fired' }, fixedContext()),
     ).toBeNull()
     expect(normalize({ ...base, notification_type: undefined }, fixedContext())).toBeNull()
+  })
+
+  it('PermissionRequest 는 attention 을 만들지 않는다 (auto mode 자동 허용에도 발생)', () => {
+    expect(normalize(loadFixture('PermissionRequest.json'), fixedContext())).toBeNull()
+    expect(normalize(loadFixture('PermissionRequest.subagent.json'), fixedContext())).toBeNull()
+  })
+
+  it('Notification(permission_prompt) 은 ctx.permissionRequester 에 귀속, 없으면 main', () => {
+    const n = loadFixture('Notification.permission_prompt.json')
+    expect(normalize(n, fixedContext())).toMatchObject({ agentId: 'main', reason: 'permission' })
+    expect(normalize(n, fixedContext({ permissionRequester: 'a4d1b0553338ecf74' }))).toMatchObject({
+      kind: 'attention',
+      agentId: 'a4d1b0553338ecf74',
+      reason: 'permission',
+    })
+    // idle_prompt 는 요청자와 무관
+    expect(
+      normalize(
+        loadFixture('Notification.idle_prompt.json'),
+        fixedContext({ permissionRequester: 'a4d1b0553338ecf74' }),
+      )?.agentId,
+    ).toBe('main')
   })
 
   it('project 는 CLAUDE_PROJECT_DIR(ctx.projectDir) 가 있으면 그 basename', () => {

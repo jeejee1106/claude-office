@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { MAIN_AGENT_ID } from '@claude-office/shared'
+import { maybeCapture } from './capture'
 import { normalize } from './normalize'
+import {
+  forgetPermissionRequest,
+  latestPermissionRequester,
+  rememberPermissionRequest,
+} from './permission-state'
 import { DEFAULT_URL, postJson, SEND_TIMEOUT_MS } from './send'
 
 /*
@@ -46,6 +53,36 @@ function readStdin(): Promise<string | null> {
   })
 }
 
+/**
+ * 권한 요청자 추적(permission-state.ts 참고). Notification(permission_prompt) 이면
+ * 귀속할 에이전트를 돌려준다.
+ */
+function trackPermission(input: unknown, nowMs: number): string | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
+  const i = input as Record<string, unknown>
+  const sessionId = typeof i.session_id === 'string' ? i.session_id : undefined
+  if (!sessionId) return undefined
+  const agentId = typeof i.agent_id === 'string' && i.agent_id !== '' ? i.agent_id : MAIN_AGENT_ID
+  switch (i.hook_event_name) {
+    case 'PermissionRequest':
+      rememberPermissionRequest(sessionId, agentId, nowMs)
+      return undefined
+    case 'PostToolUse':
+    case 'PostToolUseFailure':
+      forgetPermissionRequest(sessionId, agentId, nowMs)
+      return undefined
+    case 'SessionEnd':
+      forgetPermissionRequest(sessionId, undefined, nowMs)
+      return undefined
+    case 'Notification':
+      return i.notification_type === 'permission_prompt'
+        ? latestPermissionRequester(sessionId, nowMs)
+        : undefined
+    default:
+      return undefined
+  }
+}
+
 async function main(): Promise<void> {
   if (process.env.CLAUDE_OFFICE_DISABLE === '1') return
   const raw = await readStdin()
@@ -60,10 +97,13 @@ async function main(): Promise<void> {
     log('stdin is not JSON')
     return
   }
+  maybeCapture(input)
+  const permissionRequester = trackPermission(input, Date.now())
   const event = normalize(input, {
     now: () => new Date(),
     newId: randomUUID,
     projectDir: process.env.CLAUDE_PROJECT_DIR || undefined,
+    permissionRequester,
   })
   if (!event) {
     const name =
