@@ -1,5 +1,5 @@
 /*
- * 고정 팔레트 (pixel-art-pipeline 3절: 32색 이내, 이 표 밖의 색이 나오면 build 실패).
+ * 고정 팔레트 (pixel-art-pipeline 3절: 40색 이내, 이 표 밖의 색이 나오면 build 실패).
  * 화풍: 밝고 따뜻한 색, 외곽선은 순검정 대신 짙은 남색(outline), 광원은 좌상단(오른쪽·아래가 그림자).
  *
  * 색을 추가할 때는 기존 색으로 대신할 수 없는지 먼저 본다(가구·바닥이 다음 작업에서 이 표를 함께 쓴다).
@@ -40,11 +40,18 @@ export const PALETTE = {
   cream: '#fbefd5',
   creamShade: '#ecd3a8',
   sky: '#a9dcf5',
+  // 나머지 방(2026-10-23): 자료실 마루, 서버실 철판·랙, 휴게실 카펫. 크림 바닥과 다른 바닥 4종을 만들려고 5색 추가
+  woodLight: '#e6b77e',
+  steel: '#646b85',
+  steelDark: '#474d63',
+  carpet: '#d98a7e',
+  carpetDark: '#b8675f',
 } as const satisfies Record<string, `#${string}`>
 
 export type ColorName = keyof typeof PALETTE
 
-export const MAX_PALETTE_SIZE = 32
+/** 2026-10-23 32 → 40 (방 바닥·금속 색, pixel-art-pipeline 3절) */
+export const MAX_PALETTE_SIZE = 40
 
 /** '#rrggbb' → 0xRRGGBBAA(불투명) */
 export function rgba(name: ColorName): number {

@@ -11,28 +11,42 @@ import {
   type Prop,
   ROOMS,
   ROWS,
+  SOFA_SORT_Y,
   TILE,
 } from '../layout'
 import type { TeamId } from '../teams'
-import { animKey, type CharacterAtlas, pickFrame, resolveAnim } from './characterSheet'
+import { animKey, type CharacterAtlas, pickFrame, resolveAnim, SOFA_POSES } from './characterSheet'
 import {
+  ANIM_MS,
   DEFAULT_SIGN,
   OFFICE_FRAMES,
+  officeTiles,
   type Placement,
+  type PropSprite,
   placementOf,
+  ROOM_FRAMES,
+  type RoomActivity,
+  rackFrameIndex,
+  roomActivity,
+  roomExtras,
+  roomPropSprite,
   type SignGeometry,
   signMids,
   signTextBox,
+  stepDoor,
+  type ViewSample,
   wallDecor,
-  workAreaTiles,
 } from './officeSheet'
 import type { CharacterView, SceneRenderer } from './types'
 
 /*
- * 씬 렌더러. 바닥·벽·가구·머리 위 표시·이펙트는 아직 아틀라스가 없어 PixiJS Graphics 로 직접 그린다.
- * 캐릭터 몸은 캐릭터 아틀라스(characters.json)가 있으면 그 스프라이트로, 없거나(로드 실패)
- * 키가 빠졌으면 코드로 그린 플레이스홀더 도형으로 그린다 — 어느 경우든 화면이 비지 않는다.
+ * 씬 렌더러. 층 전체(모든 방 바닥·벽·칸막이·출입구·가구)는 office 아틀라스(office.json)가 있으면
+ * 그 스프라이트로, 없거나 프레임이 빠졌으면 그 조각만 PixiJS Graphics 로 그린 도형으로 그린다.
+ * 캐릭터 몸도 같다(characters.json). 어느 경우든 화면이 비지 않는다. 머리 위 표시·캐릭터 이펙트는 코드 그림.
  * 이 파일이 프로젝트에서 Graphics 를 생성하는 유일한 곳이다(렌더링 경계).
+ *
+ * 방 가구 애니메이션은 기존 트리거에만 붙인다: 서버랙 LED·터미널 = setServerBusy, 문 = 문 근처 캐릭터,
+ * 캐비닛·화이트보드·파쇄기·커피머신 = 그 스팟에서 그 동작 중인 캐릭터(officeSheet.roomActivity).
  *
  * 픽셀 퍼펙트: 모든 rect 는 정수 좌표·정수 크기, 위치는 Math.round, 확대는 OfficeScene 의
  * 정수 배율 stage.scale 로만. 텍스트(말풍선·이름표)는 DOM 오버레이(정수 배율 좌표)로 그린다.
@@ -132,12 +146,24 @@ export const VARIANT_COLORS: readonly (readonly [number, number])[] = [
   [0xc5c9d6, 0xf5c84c], // grayLight / yellow
 ]
 
-const SEATED: ReadonlySet<AnimName> = new Set(['idle_sit', 'sleep', 'phone_sit'])
+const SEATED: ReadonlySet<AnimName> = new Set(['idle_sit', 'sleep', 'phone_sit', 'sofa_sit'])
 const FRAME_MS = 180
 
 let warned = false
 /** 아틀라스에 없는 키는 한 번씩만 경고한다 */
 const warnedKeys = new Set<string>()
+
+/** 상태(트리거)가 켜지면 active 프레임을 ms 간격으로 돌리고, 꺼지면 idle 로 돌아가는 가구 */
+interface PropToggle {
+  sprite: Sprite
+  idle: Texture
+  active: Texture[]
+  ms: number
+  key: Exclude<keyof RoomActivity, 'doorOpen'> | 'serverBusy'
+  on: boolean
+  elapsed: number
+  step: number
+}
 
 export interface PlaceholderLayers {
   floor: Container
@@ -153,11 +179,22 @@ export class PlaceholderRenderer implements SceneRenderer {
   private readonly dimmer = new Graphics()
   private dimAlpha = 0.65
   private dimTarget = 0.65
-  private readonly leds = new Graphics()
   private ledMs = 0
   private ledTick = 0
   private serverBusy = false
-  private racks: readonly Prop[] = []
+  /** 화이트보드 글씨 남김(세션에서 계획을 한 번이라도 함 — director 의 board 명령) */
+  private boardWritten = false
+  /** 시트 프레임이 없어 코드로 그린 서버랙(LED 도 코드로 그린다) */
+  private codeRacks: { prop: Prop; leds: Graphics }[] = []
+  /** 시트 서버랙 스프라이트(애니메이션 furn_server_rack) */
+  private readonly rackSprites: { sprite: Sprite; frames: Texture[] }[] = []
+  private rackMs = 0
+  private rackStep = 0
+  /** 상태에 따라 텍스처를 바꾸는 가구(터미널·파쇄기·커피머신·화이트보드·캐비닛) */
+  private readonly toggles: PropToggle[] = []
+  private door: { sprite: Sprite; frames: Texture[]; step: number; ms: number } | null = null
+  /** 파쇄기 작동 프레임이 있으면 캐릭터의 코드 종이 조각 이펙트를 끈다(프레임 안에 조각이 있음) */
+  private shredsInProp = false
   private readonly views = new Set<PlaceholderCharacterView>()
   /** 캐릭터 층에 깊이 정렬로 섞여 그려지는 가구(팀장 책상·직원 의자) */
   private readonly frontProps: Container[] = []
@@ -235,10 +272,10 @@ export class PlaceholderRenderer implements SceneRenderer {
       g.rect(x + TILE - 3, y - 3, 2, 3).fill(C.woodDark)
     }
     this.layers.floor.addChild(g)
-    // 업무 공간 바닥·뒤 벽·칸막이: office 시트 타일(빠진 프레임은 위의 코드 그림이 그대로 보인다)
+    // 층 전체 바닥·벽·칸막이·출입구: office 시트 타일(불투명). 빠진 프레임 칸은 위의 코드 그림이 보인다
     if (this.office !== null) {
       const tiles = new Container()
-      for (const t of workAreaTiles()) {
+      for (const t of officeTiles()) {
         const tex = this.tex(t.frame)
         if (tex === null) continue
         const sp = new Sprite(tex)
@@ -248,6 +285,9 @@ export class PlaceholderRenderer implements SceneRenderer {
       }
       this.layers.floor.addChild(tiles)
     }
+    // 바닥 장식(케이블·현관 매트·러그): 바닥 타일 바로 위
+    const decor = new Container()
+    this.layers.floor.addChild(decor)
 
     const f = new Graphics()
     for (const p of props) {
@@ -259,15 +299,93 @@ export class PlaceholderRenderer implements SceneRenderer {
         continue
       }
       if (p.kind === 'window' && this.office !== null && this.drawWallDecor(p)) continue
-      // office 시트가 있으면 아래 벽의 문 자리는 열린 출입구(바닥)로 보인다
-      if (p.kind === 'door' && this.office !== null && this.tex(OFFICE_FRAMES.floor[0]) !== null)
+      const rs = roomPropSprite(p)
+      if (rs !== null) {
+        const sp = this.sprite(rs.frame, rs.x, rs.y, 0.5, 1)
+        if (sp !== null) {
+          this.place(sp, rs, decor)
+          this.registerAnim(p, sp)
+          continue
+        }
+        // office 시트가 있으면 문 그림이 없어도 아래 벽의 문 자리는 열린 출입구(바닥)로 보인다
+        if (p.kind === 'door' && this.office !== null && this.tex(OFFICE_FRAMES.floor[0]) !== null)
+          continue
+        // 프레임이 없으면 그 가구만 코드 그림 — 스프라이트와 같은 층·깊이
+        const fg = new Graphics()
+        drawProp(fg, p)
+        this.place(fg, rs, decor)
+        if (p.kind === 'serverRack') {
+          const leds = new Graphics()
+          this.addFront(leds, rs.y + 0.5)
+          this.codeRacks.push({ prop: p, leds })
+        }
         continue
+      }
       drawProp(f, p)
     }
     this.layers.furniture.addChild(f)
+    // layout 에 없는 장식(회의 의자·터미널 의자·현관 매트·러그). 프레임이 없으면 생략(전에도 없던 것)
+    if (this.office !== null) {
+      for (const e of roomExtras()) {
+        const sp = this.sprite(e.frame, e.x, e.y, 0.5, 1)
+        if (sp !== null) this.place(sp, e, decor)
+      }
+    }
+    this.shredsInProp = this.toggles.some((t) => t.key === 'shredder')
+    for (const v of this.views) v.setShredsInProp(this.shredsInProp)
+  }
 
-    this.racks = props.filter((p) => p.kind === 'serverRack')
-    this.layers.furniture.addChild(this.leds)
+  /** 방 가구 하나를 층에 놓는다(바닥 장식 / 캐릭터 아래 / 캐릭터 층 깊이 정렬) */
+  private place(obj: Container, at: PropSprite, decor: Container): void {
+    if (at.layer === 'floor') decor.addChild(obj)
+    else if (at.layer === 'under') this.layers.furniture.addChild(obj)
+    else this.addFront(obj, at.y)
+  }
+
+  private texList(names: readonly string[]): Texture[] {
+    return names.map((n) => this.tex(n)).filter((t): t is Texture => t !== null)
+  }
+
+  /** 애니메이션·상태 프레임이 있는 가구를 등록한다(빠진 프레임은 건너뛰고, 하나도 없으면 정지 그림) */
+  private registerAnim(p: Prop, sp: Sprite): void {
+    const idle = sp.texture
+    const toggle = (key: PropToggle['key'], names: readonly string[], ms: number) => {
+      const active = this.texList(names)
+      if (active.length > 0)
+        this.toggles.push({ sprite: sp, idle, active, ms, key, on: false, elapsed: 0, step: 0 })
+    }
+    switch (p.kind) {
+      case 'serverRack': {
+        const frames = this.texList(ROOM_FRAMES.serverRack)
+        const i = this.rackSprites.length
+        const first = frames[rackFrameIndex(i, 0, frames.length)]
+        if (first !== undefined) sp.texture = first
+        if (frames.length > 1) this.rackSprites.push({ sprite: sp, frames })
+        break
+      }
+      case 'terminal':
+        toggle('serverBusy', ROOM_FRAMES.terminalBusy, ANIM_MS.terminalBusy)
+        break
+      case 'shredder':
+        toggle('shredder', ROOM_FRAMES.shredderOn, ANIM_MS.shredder)
+        break
+      case 'coffee':
+        toggle('coffee', ROOM_FRAMES.coffeeBrew, ANIM_MS.coffee)
+        break
+      case 'whiteboard':
+        toggle('whiteboard', [ROOM_FRAMES.whiteboardWritten], Number.POSITIVE_INFINITY)
+        break
+      case 'cabinet':
+        toggle('cabinet', [ROOM_FRAMES.cabinetOpen], Number.POSITIVE_INFINITY)
+        break
+      case 'door': {
+        const frames = this.texList(ROOM_FRAMES.door)
+        if (frames.length > 1) this.door = { sprite: sp, frames, step: 0, ms: 0 }
+        break
+      }
+      default:
+        break
+    }
   }
 
   createCharacter(variant: number): CharacterView {
@@ -281,6 +399,7 @@ export class PlaceholderRenderer implements SceneRenderer {
       },
     )
     v.setScale(this.scale)
+    v.setShredsInProp(this.shredsInProp)
     this.views.add(v)
     return v
   }
@@ -292,6 +411,11 @@ export class PlaceholderRenderer implements SceneRenderer {
   setServerBusy(busy: boolean): void {
     this.serverBusy = busy
     this.ledMs = Number.POSITIVE_INFINITY // 바로 다시 그린다
+    this.rackMs = Number.POSITIVE_INFINITY
+  }
+
+  setBoardWritten(written: boolean): void {
+    this.boardWritten = written
   }
 
   setScale(scale: number): void {
@@ -407,23 +531,70 @@ export class PlaceholderRenderer implements SceneRenderer {
       // 조명은 4단계로 끊어서(픽셀 아트 느낌) 바꾼다
       this.dimmer.alpha = Math.round(this.dimAlpha * 4) / 4
     }
-    // 서버 LED: 평소 0.5초, 명령 실행 중이면 0.1초마다 무작위처럼(결정적) 깜빡인다
-    this.ledMs += dtMs
-    const period = this.serverBusy ? 100 : 500
-    if (this.ledMs >= period) {
-      this.ledMs = 0
-      this.ledTick++
-      this.leds.clear()
-      for (const [ri, rack] of this.racks.entries()) {
-        const x = rack.col * TILE
-        const y = rack.row * TILE
-        for (let i = 0; i < 4; i++) {
-          const n = (this.ledTick * 7 + ri * 13 + i * 5) % 11
-          const on = this.serverBusy ? n < 6 : (i + ri + this.ledTick) % 2 === 0
-          this.leds.rect(x + 4, y + 4 + i * 7, 2, 1).fill(on ? C.green : C.dark)
-          this.leds.rect(x + 8, y + 4 + i * 7, 1, 1).fill(on && n % 3 === 0 ? C.yellow : C.dark)
-          if (i === 1 && ri === 0)
-            this.leds.rect(x + 11, y + 4 + i * 7, 1, 1).fill(this.ledTick % 2 ? C.red : C.dark)
+    // 서버랙(시트): furn_server_rack 프레임을 평소 0.5초, 명령 실행 중 0.1초마다. 랙마다 시작 프레임을 엇갈림
+    if (this.rackSprites.length > 0) {
+      this.rackMs += dtMs
+      if (this.rackMs >= (this.serverBusy ? ANIM_MS.rackBusy : ANIM_MS.rackIdle)) {
+        this.rackMs = 0
+        this.rackStep++
+        for (const [i, r] of this.rackSprites.entries()) {
+          const t = r.frames[rackFrameIndex(i, this.rackStep, r.frames.length)]
+          if (t !== undefined) r.sprite.texture = t
+        }
+      }
+    }
+    // 서버 LED(코드로 그린 랙만): 평소 0.5초, 명령 실행 중이면 0.1초마다 무작위처럼(결정적) 깜빡인다
+    if (this.codeRacks.length > 0) {
+      this.ledMs += dtMs
+      if (this.ledMs >= (this.serverBusy ? ANIM_MS.rackBusy : ANIM_MS.rackIdle)) {
+        this.ledMs = 0
+        this.ledTick++
+        for (const [ri, { prop, leds }] of this.codeRacks.entries()) {
+          drawLeds(leds, prop, ri, this.ledTick, this.serverBusy)
+        }
+      }
+    }
+    this.tickRoomProps(dtMs)
+  }
+
+  /** 문·터미널·파쇄기·커피머신·화이트보드·캐비닛: 캐릭터 상태(와 서버 busy)에서 프레임을 고른다 */
+  private tickRoomProps(dtMs: number): void {
+    if (this.toggles.length === 0 && this.door === null) return
+    const samples: ViewSample[] = []
+    for (const v of this.views) {
+      const s = v.sample()
+      if (s !== null) samples.push(s)
+    }
+    const act = roomActivity(samples)
+    // 화이트보드: 쓰는 중이거나, 이 세션에서 계획을 한 번이라도 했으면 글씨가 남아 있다
+    if (this.boardWritten) act.whiteboard = true
+    for (const t of this.toggles) {
+      const on = t.key === 'serverBusy' ? this.serverBusy : act[t.key]
+      if (on !== t.on) {
+        t.on = on
+        t.elapsed = 0
+        t.step = 0
+        t.sprite.texture = on ? (t.active[0] ?? t.idle) : t.idle
+        continue
+      }
+      if (!on || t.active.length < 2) continue
+      t.elapsed += dtMs
+      if (t.elapsed < t.ms) continue
+      t.elapsed = 0
+      t.step = (t.step + 1) % t.active.length
+      t.sprite.texture = t.active[t.step] ?? t.idle
+    }
+    // 문: 누가 문 근처면 열고(닫힘→반쯤→열림), 지나가면 거꾸로 닫는다. 80ms 한 칸, 반복 없음
+    const d = this.door
+    if (d !== null) {
+      d.ms += dtMs
+      if (d.ms >= ANIM_MS.door) {
+        d.ms = 0
+        const next = stepDoor(d.step, act.doorOpen, d.frames.length)
+        if (next !== d.step) {
+          d.step = next
+          const t = d.frames[next]
+          if (t !== undefined) d.sprite.texture = t
         }
       }
     }
@@ -434,6 +605,10 @@ export class PlaceholderRenderer implements SceneRenderer {
     for (const v of [...this.views]) v.destroy()
     for (const c of this.frontProps.splice(0)) c.destroy()
     this.signs.length = 0
+    this.codeRacks = []
+    this.rackSprites.length = 0
+    this.toggles.length = 0
+    this.door = null
     for (const c of this.layers.floor.removeChildren()) c.destroy()
     for (const c of this.layers.furniture.removeChildren()) c.destroy()
     for (const c of this.layers.lighting.removeChildren()) c.destroy()
@@ -455,6 +630,20 @@ function layoutSign(s: SignLabel): void {
   }
   s.text.x = Math.round(s.x + (s.w - s.text.width) / 2)
   s.text.y = Math.round(s.y + (s.h - s.text.height) / 2)
+}
+
+/** 코드로 그린 서버랙의 LED(시트 프레임이 없을 때만) */
+function drawLeds(g: Graphics, rack: Prop, ri: number, tick: number, busy: boolean): void {
+  g.clear()
+  const x = rack.col * TILE
+  const y = rack.row * TILE
+  for (let i = 0; i < 4; i++) {
+    const n = (tick * 7 + ri * 13 + i * 5) % 11
+    const on = busy ? n < 6 : (i + ri + tick) % 2 === 0
+    g.rect(x + 4, y + 4 + i * 7, 2, 1).fill(on ? C.green : C.dark)
+    g.rect(x + 8, y + 4 + i * 7, 1, 1).fill(on && n % 3 === 0 ? C.yellow : C.dark)
+    if (i === 1 && ri === 0) g.rect(x + 11, y + 4 + i * 7, 1, 1).fill(tick % 2 ? C.red : C.dark)
+  }
 }
 
 function drawFloorTile(g: Graphics, kind: (typeof ROOMS)[number]['floor'], c: number, r: number) {
@@ -725,6 +914,8 @@ class PlaceholderCharacterView implements CharacterView {
   private readonly atlas: CharacterAtlas<Texture> | null
   private readonly variant: number
   private usingSprite = false
+  /** 스프라이트로 실제 그리는 동작(대체 그림이면 대체 동작). 스프라이트 크기는 텍스처 크기 그대로(sofa_lie 32×16) */
+  private drawnAnim: AnimName | null = null
   private readonly ring = new Graphics()
   private readonly markG = new Graphics()
   private readonly fx = new Graphics()
@@ -741,6 +932,7 @@ class PlaceholderCharacterView implements CharacterView {
   private mark: Mark | null = null
   private effect: Effect | null = null
   private highlight = false
+  private shredsInProp = false
   private px = Number.NaN
   private py = Number.NaN
   private scale = 1
@@ -779,6 +971,19 @@ class PlaceholderCharacterView implements CharacterView {
     this.placeDom()
   }
 
+  /** 파쇄기 시트 프레임(종이 조각 포함)이 있으면 코드 종이 조각을 그리지 않는다(렌더러 내부 전용) */
+  setShredsInProp(on: boolean): void {
+    if (this.shredsInProp === on) return
+    this.shredsInProp = on
+    if (this.effect === 'shreds') this.drawFx()
+  }
+
+  /** 방 가구 애니메이션 트리거용 요약(렌더러 내부 전용). 아직 배치 전이면 null */
+  sample(): ViewSample | null {
+    if (Number.isNaN(this.px)) return null
+    return { x: this.px, y: this.py, anim: this.anim }
+  }
+
   setPosition(x: number, y: number): void {
     const rx = Math.round(x)
     const ry = Math.round(y)
@@ -787,19 +992,27 @@ class PlaceholderCharacterView implements CharacterView {
     this.py = ry
     this.root.x = rx
     this.root.y = ry
-    this.root.zIndex = ry
+    this.updateDepth()
     this.placeDom()
+  }
+
+  /** 깊이 = 발끝 y. 소파 위 동작은 소파 바로 위(SOFA_SORT_Y = 소파 앵커 y + 1) — 좌석 쿠션이 사람을 덮지 않게 */
+  private updateDepth(): void {
+    if (Number.isNaN(this.py)) return
+    this.root.zIndex = SOFA_POSES.has(this.anim) ? SOFA_SORT_Y : this.py
   }
 
   setAnimation(anim: AnimName, dir: Dir): void {
     if (anim === this.anim && dir === this.dir) return
     this.anim = anim
     this.dir = dir
+    this.updateDepth()
     this.elapsed = 0
     this.frame = -1
     this.redraw()
-    // 가방·김 위치는 동작·방향에 따라 달라진다
+    // 가방·김 위치는 동작·방향에 따라 달라진다. 표시 위치도(누운 모습)
     if (this.effect !== null) this.drawFx()
+    if (this.mark !== null) this.drawMark()
   }
 
   setMark(mark: Mark | null): void {
@@ -877,6 +1090,7 @@ class PlaceholderCharacterView implements CharacterView {
       const resolved = resolveAnim(this.atlas, this.variant, this.anim, this.dir)
       if (resolved !== null) {
         this.usingSprite = true
+        this.drawnAnim = resolved.anim
         this.sprite.visible = true
         // 대체 그림(예: 앉아서 전화 = phone 프레임을 앉은 높이로)은 정수 px 만큼 내린다
         this.sprite.y = resolved.dy
@@ -893,6 +1107,7 @@ class PlaceholderCharacterView implements CharacterView {
       }
     }
     this.usingSprite = false
+    this.drawnAnim = null
     this.sprite.visible = false
     this.body.visible = true
     this.drawBody()
@@ -912,6 +1127,19 @@ class PlaceholderCharacterView implements CharacterView {
     const seated = SEATED.has(this.anim)
     const back = this.dir === 'up'
     g.clear()
+
+    if (this.anim === 'sofa_lie') {
+      // 소파에 누움: 머리 왼쪽, 몸·다리 오른쪽으로 눕힌 모습(소파 폭 안, -12..12). 숨 쉬듯 몸통 1px
+      g.rect(-12, -11, 9, 9).fill(C.outline)
+      g.rect(-11, -10, 7, 7).fill(C.skin)
+      g.rect(-11, -10, 2, 7).fill(this.hair)
+      g.rect(-7, -7, 2, 1).fill(C.outline) // 감은 눈
+      g.rect(-3, -9 - (two ? 1 : 0), 9, 7 + (two ? 1 : 0)).fill(C.outline)
+      g.rect(-2, -8 - (two ? 1 : 0), 7, 5 + (two ? 1 : 0)).fill(this.shirt)
+      g.rect(6, -7, 6, 4).fill(C.pants)
+      g.rect(11, -7, 1, 4).fill(C.outline)
+      return
+    }
 
     let bob = 0
     if (this.anim === 'search' || this.anim === 'type' || this.anim === 'pack') bob = two
@@ -1044,7 +1272,11 @@ class PlaceholderCharacterView implements CharacterView {
     if (m === null) return
     const f = Math.max(this.frame, 0)
     const blinkOff = f % 4 >= 3
-    const top = -34
+    // 누운 모습(sofa_lie 32×16 스프라이트·도형)은 머리가 낮고 왼쪽 팔걸이 쪽(x −14..−6, y −13..)에 있다
+    // → 표시를 그 머리 바로 위로. 대체 그림(앉아 조는 sleep 프레임)이면 평소 자리
+    const lying = this.anim === 'sofa_lie' && (!this.usingSprite || this.drawnAnim === 'sofa_lie')
+    const top = lying ? -22 : -34
+    g.x = lying ? -14 : 0
     if (m === 'sleep') {
       const z = f % 6
       drawGlyph(g, 'Z', 4, top + 4 - Math.floor(z / 2), C.zzz)
@@ -1143,6 +1375,8 @@ class PlaceholderCharacterView implements CharacterView {
         break
       }
       case 'shreds': {
+        // 파쇄기 시트 그림(furn_shredder_on)에 떨어지는 조각이 이미 있다 — 같은 연출을 두 번 그리지 않는다
+        if (this.shredsInProp) break
         // 파쇄기 아래로 떨어지는 종이 조각
         for (let i = 0; i < 4; i++) {
           const p = (f + i * 2) % 6

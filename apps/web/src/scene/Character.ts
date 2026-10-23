@@ -74,7 +74,14 @@ export const LEAVE_REPORT_MAX_MS = 5000
 /** update 한 번에 진행하는 최대 시간 조각 */
 const STEP_MS = 50
 
-const IDLE_ANIMS: ReadonlySet<AnimName> = new Set(['idle_sit', 'idle_stand', 'idle_drink', 'sleep'])
+const IDLE_ANIMS: ReadonlySet<AnimName> = new Set([
+  'idle_sit',
+  'idle_stand',
+  'idle_drink',
+  'sofa_sit',
+  'sofa_lie',
+  'sleep',
+])
 
 interface Point {
   x: number

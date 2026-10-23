@@ -8,6 +8,7 @@ import {
   type CharacterAtlas,
   DEFAULT_FRAME_MS,
   DIRS,
+  DOWN_ONLY,
   fallbackAnimationKeys,
   frameMsFor,
   missingAnimationKeys,
@@ -50,7 +51,11 @@ describe('characterSheet 조회', () => {
       animations: { char_1_phone_down: ['p0', 'p1'] },
       frameMs: { phone: 300 },
     }
-    expect(resolveAnim(a, 1, 'phone_sit', 'down')).toEqual({ anim: 'phone', dy: SIT_DROP_PX })
+    expect(resolveAnim(a, 1, 'phone_sit', 'down')).toEqual({
+      anim: 'phone',
+      dy: SIT_DROP_PX,
+      dir: 'down',
+    })
     expect(SIT_DROP_PX).toBe(2)
     expect(pickFrame(a, 1, 'phone_sit', 'down', 0)).toBe('p0')
     expect(pickFrame(a, 1, 'phone_sit', 'down', 300)).toBe('p1')
@@ -62,8 +67,36 @@ describe('characterSheet 조회', () => {
       animations: { char_1_phone_down: ['p0'], char_1_phone_sit_down: ['s0'] },
       frameMs: {},
     }
-    expect(resolveAnim(drawn, 1, 'phone_sit', 'down')).toEqual({ anim: 'phone_sit', dy: 0 })
+    expect(resolveAnim(drawn, 1, 'phone_sit', 'down')).toEqual({
+      anim: 'phone_sit',
+      dy: 0,
+      dir: 'down',
+    })
     expect(pickFrame(drawn, 1, 'phone_sit', 'down', 0)).toBe('s0')
+  })
+
+  it('방향 무관 동작(sofa_sit·sofa_lie)은 캐릭터 방향과 관계없이 _down 키, 없으면 원래 방향의 대체 그림', () => {
+    const a: CharacterAtlas<string> = {
+      animations: {
+        char_3_sofa_sit_down: ['s0', 's1'],
+        char_3_sofa_lie_down: ['l0'],
+        char_4_idle_sit_up: ['i0'],
+        char_4_sleep_up: ['z0'],
+      },
+      frameMs: { sofa_sit: 600 },
+    }
+    expect([...DOWN_ONLY].sort()).toEqual(['sofa_lie', 'sofa_sit'])
+    for (const d of DIRS) {
+      expect(resolveAnim(a, 3, 'sofa_sit', d)).toEqual({ anim: 'sofa_sit', dy: 0, dir: 'down' })
+      expect(pickFrame(a, 3, 'sofa_sit', d, 600)).toBe('s1')
+      expect(pickFrame(a, 3, 'sofa_lie', d, 0)).toBe('l0')
+    }
+    // 프레임이 없는 변형: 소파를 향한 뒷모습(up)의 idle_sit / sleep
+    expect(pickFrame(a, 4, 'sofa_sit', 'up', 0)).toBe('i0')
+    expect(pickFrame(a, 4, 'sofa_lie', 'up', 0)).toBe('z0')
+    expect(
+      missingAnimationKeys(a.animations, 4).filter((k) => k.startsWith('char_3_sofa')),
+    ).toEqual([])
   })
 
   it('parseFrameMs: 잘못된 값은 버린다', () => {
@@ -79,7 +112,7 @@ describe('실제 아틀라스 apps/web/public/assets/characters.json', () => {
   const json = JSON.parse(readFileSync(path, 'utf8')) as {
     frames: Record<string, { frame: { w: number; h: number }; anchor?: { x: number; y: number } }>
     animations: Record<string, string[]>
-    meta: { image: string; frameMs: Record<string, number> }
+    meta: { image: string; frameMs: Record<string, number>; downOnly?: string[] }
   }
 
   it('씬이 쓰는 모든 동작 × 4방향 × 변형 키가 있고 프레임이 실제로 존재한다', () => {
@@ -89,11 +122,27 @@ describe('실제 아틀라스 apps/web/public/assets/characters.json', () => {
     }
   })
 
-  it('프레임은 16×24, 앵커 (0.5, 1) — 표시·말풍선·이름표 오프셋의 전제', () => {
-    for (const fr of Object.values(json.frames)) {
-      expect(fr.frame).toMatchObject({ w: 16, h: 24 })
-      expect(fr.anchor).toEqual({ x: 0.5, y: 1 })
+  it('프레임은 16×24(sofa_lie 만 32×16), 앵커 (0.5, 1) — 표시·말풍선·이름표 오프셋의 전제', () => {
+    let lie = 0
+    for (const [name, fr] of Object.entries(json.frames)) {
+      // 누운 그림은 넓고 낮다(pixel-artist "2026-10-23 sofa"). 렌더러는 텍스처 크기를 그대로 쓴다
+      if (/_sofa_lie_/.test(name)) {
+        lie++
+        expect(fr.frame, name).toMatchObject({ w: 32, h: 16 })
+      } else expect(fr.frame, name).toMatchObject({ w: 16, h: 24 })
+      expect(fr.anchor, name).toEqual({ x: 0.5, y: 1 })
     }
+    expect(lie).toBe(VARIANT_COUNT * 2)
+  })
+
+  it('방향 무관 동작은 _down 키만 있고 meta.downOnly 와 같다', () => {
+    expect([...(json.meta.downOnly ?? [])].sort()).toEqual([...DOWN_ONLY].sort())
+    for (let v = 0; v < VARIANT_COUNT; v++)
+      for (const a of DOWN_ONLY) {
+        expect(json.animations[animKey(v, a, 'down')]?.length, `${v} ${a}`).toBeGreaterThan(0)
+        for (const d of ['up', 'left', 'right'] as const)
+          expect(json.animations[animKey(v, a, d)], `${v} ${a} ${d}`).toBeUndefined()
+      }
   })
 
   it('모든 동작의 frameMs 가 있다(대체 그림으로 그리는 동작은 대체 동작의 frameMs)', () => {

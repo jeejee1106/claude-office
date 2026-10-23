@@ -6,6 +6,7 @@ import {
 } from '@claude-office/shared'
 import type { LineKey } from '../i18n'
 import type { SpotId } from './layout'
+import { hashString } from './variant'
 
 /*
  * 이벤트 → 사무실 행동 매핑 (단일 테이블).
@@ -29,6 +30,10 @@ export const ANIMATIONS = [
   /** 자기 자리에 앉은 채 전화(서브에이전트 호출). 아틀라스에 없으면 phone 프레임을 앉은 높이로 내려 그린다(characterSheet ANIM_FALLBACK) */
   'phone_sit',
   'idle_drink',
+  /** 휴게실 소파에 앉아 쉼. 아틀라스에 없으면 idle_sit 프레임(characterSheet ANIM_FALLBACK) */
+  'sofa_sit',
+  /** 휴게실 소파에 누워 쉼(넓은 프레임). 아틀라스에 없으면 sleep 프레임 */
+  'sofa_lie',
   'raise_hand',
   'shred',
   'sleep',
@@ -200,7 +205,8 @@ export const KIND_ACTIVITY: Readonly<Record<OfficeEventKind, KindActivity>> = {
   },
   // 팀장 쪽을 보고 보고 후 퇴근 인사("퇴근하겠습니다!")와 함께 문으로 퇴장
   'agent.finish': { subject: 'self', motion: 'leave', line: 'subFinish', leaveStyle: 'report' },
-  // 휴게실 커피머신에서 idle_drink + 김 나는 컵("휴~")
+  // 휴게실에서 쉼("휴~"). 기본(이 행) = 커피머신 idle_drink + 김 나는 컵.
+  // director 가 이벤트 id 로 LOUNGE_REST(커피·소파 앉기·소파 눕기) 중 하나를 고른다(소파가 차 있으면 커피)
   'turn.end': {
     subject: 'self',
     motion: 'goto',
@@ -228,6 +234,74 @@ export const KIND_ACTIVITY: Readonly<Record<OfficeEventKind, KindActivity>> = {
   },
   // 자기 책상 idle_sit, isAsleep 이면 sleep(Zzz) — director 가 SLEEP_ACTIVITY 로 바꾼다
   'agent.idle': { subject: 'self', motion: 'goto', spot: 'ownDesk', anim: 'idle_sit' },
+}
+
+/**
+ * 한 턴 끝(turn.end) 휴게실 쉬기 3가지 (기획서 5절 "한 턴 끝"). 대사 "휴~"는 공통, 김 나는 컵은 커피만.
+ * 어떤 것을 할지는 pickLoungeRest(이벤트 id) — 리플레이마다 같다(기획서 6절 결정성 규칙).
+ */
+export type LoungeRest = 'coffee' | 'sofaSit' | 'sofaLie'
+export const LOUNGE_RESTS: readonly LoungeRest[] = ['coffee', 'sofaSit', 'sofaLie']
+
+export const LOUNGE_REST: Readonly<Record<LoungeRest, KindActivity>> = {
+  coffee: KIND_ACTIVITY['turn.end'],
+  sofaSit: {
+    subject: 'self',
+    motion: 'goto',
+    spot: 'sofaSit',
+    anim: 'sofa_sit',
+    line: 'turnEnd',
+  },
+  sofaLie: {
+    subject: 'self',
+    motion: 'goto',
+    spot: 'sofaLie',
+    anim: 'sofa_lie',
+    line: 'turnEnd',
+  },
+}
+
+/**
+ * 소파 자리 규칙(pixel-artist 요약 "2026-10-23 sofa"): 앉기는 최대 2명(왼쪽·오른쪽),
+ * 누운 사람은 좌석 전부를 차지 → 누가 누워 있으면 앉기·눕기 모두 불가, 누가 앉아 있으면 눕기 불가.
+ */
+export const SOFA_SIT_MAX = 2
+
+export interface SofaUse {
+  /** 다른 사람 중 소파에 앉은 수 */
+  sitting: number
+  /** 다른 사람 중 소파에 누운 수 */
+  lying: number
+}
+
+export function sofaAllows(rest: LoungeRest, use: SofaUse): boolean {
+  if (rest === 'coffee') return true
+  if (use.lying > 0) return false
+  return rest === 'sofaSit' ? use.sitting < SOFA_SIT_MAX : use.sitting === 0
+}
+
+/**
+ * 이벤트 id 로 쉬기 동작을 고른다. 대사 후보 선택(pickLine: `${id}:turnEnd`)과 따로 움직이도록
+ * 다른 접두사로 해시한다. 고른 소파 동작이 자리가 없으면(sofaAllows) 커피.
+ */
+export function pickLoungeRest(
+  eventId: string,
+  use: SofaUse = { sitting: 0, lying: 0 },
+): LoungeRest {
+  const rest = LOUNGE_RESTS[hashString(`lounge:${eventId}`) % LOUNGE_RESTS.length] ?? 'coffee'
+  return sofaAllows(rest, use) ? rest : 'coffee'
+}
+
+/**
+ * 소파에 누워 있다가 오래 쉬면(isAsleep) 책상으로 가지 않고 그 자리에서 Zzz.
+ * 기획서 5절 "오래 쉼 = 책상에서 졺"의 예외: 이미 누워 있는 사람을 책상까지 걸려 보내 재우는 것이
+ * 더 어색하다. 소파에 앉기·커피는 기존 규칙대로 책상에서 졺. 다시 배치(syncAll)는 상태에
+ * 소파 정보가 없으므로 기존대로 책상 sleep.
+ */
+export const SOFA_SLEEP_ACTIVITY: KindActivity = {
+  subject: 'self',
+  motion: 'none',
+  mark: 'sleep',
 }
 
 /** agent.idle + isAsleep() 일 때 */

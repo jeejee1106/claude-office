@@ -28,8 +28,10 @@ export type Key =
   | 'U' // blueDark
   | 'n' // chestnut (가방)
   | 'N' // chestnutDark
+  | 'y' // sky (소파 등받이 윗면)
 
 const KEYS = new Set<string>([
+  'y',
   'o',
   'w',
   's',

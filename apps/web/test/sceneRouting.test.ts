@@ -39,7 +39,9 @@ const types = (out: DirectorOutput[]) =>
       ? `lights:${c.on}`
       : c.type === 'servers'
         ? `servers:${c.busy}`
-        : `${c.type}:${c.agentId}`,
+        : c.type === 'board'
+          ? `board:${c.written}`
+          : `${c.type}:${c.agentId}`,
   )
 
 describe('routeSceneEvent (QA B4-e)', () => {

@@ -1,5 +1,12 @@
 import { PixelImage } from './canvas'
-import { type Anchor, buildOfficeFrames, type OfficeFrame, SIGN, TILE } from './sprites/office'
+import {
+  type Anchor,
+  buildOfficeFrames,
+  OFFICE_ANIMATIONS,
+  type OfficeFrame,
+  SIGN,
+  TILE,
+} from './sprites/office'
 
 /*
  * 사무실 시트 조립: 크기가 다른 프레임을 선반(shelf) 방식으로 한 장에 배치 + PixiJS 아틀라스.
@@ -40,6 +47,7 @@ export interface OfficeAtlas {
 export function packOffice(
   frames: OfficeFrame[] = buildOfficeFrames(),
   imageName = 'office.png',
+  animations: Readonly<Record<string, readonly string[]>> = OFFICE_ANIMATIONS,
 ): { image: PixelImage; atlas: OfficeAtlas } {
   const pos: { x: number; y: number }[] = []
   let x = 0
@@ -76,7 +84,7 @@ export function packOffice(
     image,
     atlas: {
       frames: out,
-      animations: {},
+      animations: Object.fromEntries(Object.entries(animations).map(([k, v]) => [k, [...v]])),
       meta: {
         app: '@claude-office/assets (generated — do not edit by hand)',
         version: '1',

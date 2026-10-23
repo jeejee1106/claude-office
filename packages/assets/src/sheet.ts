@@ -3,13 +3,14 @@ import { type CharacterVariant, type ColorName, rgba, VARIANTS } from './palette
 import {
   ACTIONS,
   ALL_DIRS,
+  actionDirs,
+  actionFrames,
   type Dir,
   type DrawDir,
   FRAME_H,
   FRAME_W,
-  poseLayers,
 } from './sprites/character'
-import { compose, type Key, type KeyFrame } from './sprites/layers'
+import type { Key, KeyFrame } from './sprites/layers'
 
 /*
  * 캐릭터 시트 조립: 변형 × 행동 × 방향 × 프레임 → 프레임 이미지 → 한 장의 시트 + PixiJS 아틀라스.
@@ -33,6 +34,7 @@ const FIXED: Record<Exclude<Key, 'c' | 'C' | 'h' | 'H'>, ColorName> = {
   U: 'blueDark',
   n: 'chestnut',
   N: 'chestnutDark',
+  y: 'sky',
 }
 
 export function keyColor(k: Key, v: CharacterVariant): ColorName {
@@ -51,7 +53,7 @@ export function keyColor(k: Key, v: CharacterVariant): ColorName {
 }
 
 export function colorize(frame: KeyFrame, v: CharacterVariant): PixelImage {
-  const img = new PixelImage(FRAME_W, FRAME_H)
+  const img = new PixelImage(frame[0]?.length ?? FRAME_W, frame.length)
   frame.forEach((row, y) => {
     row.forEach((k, x) => {
       if (k !== null) img.set(x, y, rgba(keyColor(k, v)))
@@ -71,22 +73,18 @@ export interface CharacterSheet {
   frameMs: Record<string, number>
 }
 
-/** 변형과 무관한 기호 프레임(방향 3개만) — 테스트·미리보기에서도 쓴다 */
+/** 변형과 무관한 기호 프레임(그리는 방향만: down·up·left, downOnly 행동은 down) — 테스트·미리보기에서도 쓴다 */
 export function keyFrames(): Map<string, KeyFrame[]> {
   const out = new Map<string, KeyFrame[]>()
   for (const action of ACTIONS) {
-    for (const dir of ['down', 'up', 'left'] as DrawDir[]) {
-      const poses = action.frames(dir)
-      out.set(
-        `${action.name}_${dir}`,
-        poses.map((p, i) =>
-          compose(poseLayers(dir, p), FRAME_W, FRAME_H, `${action.name}_${dir}_${i}`),
-        ),
-      )
-    }
+    const dirs: DrawDir[] = action.downOnly ? ['down'] : ['down', 'up', 'left']
+    for (const dir of dirs) out.set(`${action.name}_${dir}`, actionFrames(action, dir))
   }
   return out
 }
+
+/** 방향 무관(키가 `_down` 하나뿐인) 행동 이름 — 아틀라스 meta.downOnly */
+export const DOWN_ONLY_ACTIONS = ACTIONS.filter((a) => a.downOnly).map((a) => a.name)
 
 export function buildCharacterSheet(): CharacterSheet {
   const keyed = keyFrames()
@@ -96,7 +94,7 @@ export function buildCharacterSheet(): CharacterSheet {
   for (const v of VARIANTS) {
     for (const action of ACTIONS) {
       frameMs[action.name] = action.frameMs
-      for (const dir of ALL_DIRS) {
+      for (const dir of actionDirs(action)) {
         const src = keyed.get(`${action.name}_${dir === 'right' ? 'left' : dir}`) ?? []
         const names: string[] = []
         src.forEach((kf, i) => {
@@ -144,24 +142,44 @@ export interface PixiAtlas {
     frameMs: Record<string, number>
     variants: { id: number; label: string; shirt: string; hair: string }[]
     directions: readonly Dir[]
+    /** 방향 무관 행동(키는 `_down` 하나). frameSize 와 크기가 다른 프레임은 frames[].sourceSize 를 본다 */
+    downOnly: string[]
   }
 }
 
-/** 고정 격자로 배치(프레임 순서 = 이름 생성 순서, 결정적) */
+/**
+ * 고정 격자(16×24 칸)로 배치(프레임 순서 = 이름 생성 순서, 결정적).
+ * 16 보다 넓은 프레임(sofa_lie 32×16)은 같은 줄의 칸을 ceil(w/16)개 이어 쓰고(칸 위쪽에 붙임),
+ * 줄 끝에 안 들어가면 다음 줄로 넘긴다.
+ */
 export function packSheet(sheet: CharacterSheet, imageName: string): PackedSheet {
-  const rows = Math.ceil(sheet.frames.length / SHEET_COLUMNS)
-  const image = new PixelImage(SHEET_COLUMNS * FRAME_W, rows * FRAME_H)
+  const slots: { x: number; y: number }[] = []
+  let col = 0
+  let row = 0
+  for (const f of sheet.frames) {
+    const span = Math.ceil(f.image.width / FRAME_W)
+    if (f.image.height > FRAME_H || span > SHEET_COLUMNS)
+      throw new Error(`${f.name}: ${f.image.width}x${f.image.height} does not fit a sheet row`)
+    if (col + span > SHEET_COLUMNS) {
+      col = 0
+      row++
+    }
+    slots.push({ x: col * FRAME_W, y: row * FRAME_H })
+    col += span
+  }
+  const image = new PixelImage(SHEET_COLUMNS * FRAME_W, (row + 1) * FRAME_H)
   const frames: Record<string, PixiFrame> = {}
   sheet.frames.forEach((f, i) => {
-    const x = (i % SHEET_COLUMNS) * FRAME_W
-    const y = Math.floor(i / SHEET_COLUMNS) * FRAME_H
+    const { x, y } = slots[i] as { x: number; y: number }
+    const w = f.image.width
+    const h = f.image.height
     image.blit(f.image, x, y)
     frames[f.name] = {
-      frame: { x, y, w: FRAME_W, h: FRAME_H },
+      frame: { x, y, w, h },
       rotated: false,
       trimmed: false,
-      spriteSourceSize: { x: 0, y: 0, w: FRAME_W, h: FRAME_H },
-      sourceSize: { w: FRAME_W, h: FRAME_H },
+      spriteSourceSize: { x: 0, y: 0, w, h },
+      sourceSize: { w, h },
       anchor: { x: 0.5, y: 1 },
     }
   })
@@ -182,6 +200,7 @@ export function packSheet(sheet: CharacterSheet, imageName: string): PackedSheet
         frameMs: sheet.frameMs,
         variants: VARIANTS.map((v) => ({ id: v.id, label: v.label, shirt: v.shirt, hair: v.hair })),
         directions: ALL_DIRS,
+        downOnly: DOWN_ONLY_ACTIONS,
       },
     },
   }

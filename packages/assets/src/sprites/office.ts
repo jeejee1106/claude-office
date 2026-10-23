@@ -1,5 +1,21 @@
 import { PixelImage } from '../canvas'
 import { type ColorName, rgba } from '../palette'
+import {
+  type Anchor,
+  art,
+  bottomCenter,
+  FLOOR_ANCHOR,
+  type OfficeFrame,
+  outlined,
+  outlineInPlace,
+  paint,
+  TILE,
+  TILE_ANCHOR,
+} from './draw'
+import { buildRoomFrames } from './rooms'
+
+export { type Anchor, art, type OfficeFrame, outlined, TILE } from './draw'
+export { OFFICE_ANIMATIONS } from './rooms'
 
 /*
  * 사무실 시트(office): 업무 공간 한 칸에 필요한 바닥·벽·칸막이 타일, 책상·의자, 팀 간판, 소품.
@@ -16,102 +32,6 @@ import { type ColorName, rgba } from '../palette'
  * 앵커(anchor)는 프레임 크기에 대한 비율(PixiJS 규약). 가구는 바닥 접점 = 아래 가운데 (0.5, 1),
  * 타일은 왼쪽 위 (0, 0), 간판 3조각은 아래 왼쪽 (0, 1) — 조각을 x 로 이어 붙이기 쉽게.
  */
-
-export const TILE = 16
-
-/** 문자 그리드 기호 → 팔레트 색 ('.' 투명) */
-const KEY: Record<string, ColorName> = {
-  o: 'outline',
-  w: 'white',
-  W: 'grayLight',
-  G: 'gray',
-  i: 'ink',
-  I: 'inkDark',
-  n: 'chestnut',
-  N: 'chestnutDark',
-  b: 'brown',
-  B: 'brownDark',
-  y: 'yellow',
-  Y: 'yellowDark',
-  g: 'green',
-  E: 'greenDark',
-  t: 'teal',
-  T: 'tealDark',
-  c: 'coral',
-  C: 'coralDark',
-  u: 'blue',
-  U: 'blueDark',
-  p: 'pink',
-  P: 'pinkDark',
-  v: 'purple',
-  V: 'purpleDark',
-  s: 'skin',
-  S: 'skinShade',
-  k: 'sky',
-  m: 'cream',
-  M: 'creamShade',
-  a: 'pants',
-}
-
-/** 문자 그리드 → 이미지. 모든 행 길이가 같아야 한다 */
-export function art(rows: readonly string[]): PixelImage {
-  const w = rows[0]?.length ?? 0
-  const img = new PixelImage(w, rows.length)
-  rows.forEach((r, y) => {
-    if (r.length !== w)
-      throw new Error(`grid row ${y} has ${r.length} columns, expected ${w}: "${r}"`)
-    for (let x = 0; x < r.length; x++) {
-      const ch = r[x] as string
-      if (ch === '.') continue
-      const k = KEY[ch]
-      if (!k) throw new Error(`unknown grid key '${ch}' in row "${r}"`)
-      img.set(x, y, rgba(k))
-    }
-  })
-  return img
-}
-
-/** 바깥(4방향 이웃 중 빈칸)에 1px 외곽선을 두른 새 이미지. 크기 +2 */
-export function outlined(img: PixelImage): PixelImage {
-  const out = new PixelImage(img.width + 2, img.height + 2)
-  out.blit(img, 1, 1)
-  const o = rgba('outline')
-  for (let y = 0; y < out.height; y++)
-    for (let x = 0; x < out.width; x++) {
-      if (img.get(x - 1, y - 1) !== 0) continue
-      if (img.get(x - 2, y - 1) || img.get(x, y - 1) || img.get(x - 1, y - 2) || img.get(x - 1, y))
-        out.set(x, y, o)
-    }
-  return out
-}
-
-/** 이미 그려진 픽셀은 두고, 주어진 픽셀 집합 둘레의 빈칸에만 외곽선 */
-function outlineInPlace(img: PixelImage, px: readonly (readonly [number, number])[]): void {
-  const filled = new Set(px.map(([x, y]) => `${x},${y}`))
-  const o = rgba('outline')
-  for (const [x, y] of px)
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ] as const) {
-      const nx = x + dx
-      const ny = y + dy
-      if (!filled.has(`${nx},${ny}`) && img.get(nx, ny) === 0) img.set(nx, ny, o)
-    }
-}
-
-function paint(img: PixelImage, x: number, y: number, w: number, h: number, c: ColorName) {
-  img.fill(x, y, w, h, rgba(c))
-}
-
-/** w×h 프레임에 그림을 아래 가운데 맞춤(바닥 접점이 프레임 맨 아래 줄) */
-function bottomCenter(w: number, h: number, item: PixelImage): PixelImage {
-  const f = new PixelImage(w, h)
-  f.blit(item, Math.floor((w - item.width) / 2), h - item.height)
-  return f
-}
 
 // ---------------------------------------------------------------------------
 // 타일 (16×16, 완전 불투명)
@@ -595,21 +515,6 @@ export function signMidsFor(textWidth: number): number {
 // 프레임 목록
 // ---------------------------------------------------------------------------
 
-export interface Anchor {
-  x: number
-  y: number
-}
-
-export interface OfficeFrame {
-  name: string
-  image: PixelImage
-  anchor: Anchor
-  /** 요약 문서·미리보기용 한 줄 설명 */
-  note: string
-}
-
-const TILE_ANCHOR: Anchor = { x: 0, y: 0 }
-const FLOOR_ANCHOR: Anchor = { x: 0.5, y: 1 }
 const SIGN_ANCHOR: Anchor = { x: 0, y: 1 }
 
 export function buildOfficeFrames(): OfficeFrame[] {
@@ -625,17 +530,14 @@ export function buildOfficeFrames(): OfficeFrame[] {
     anchor,
     note,
   })
-  return [
-    tile(
-      'tile_floor_0',
-      floorTile([
-        [4, 5],
-        [11, 9],
-        [7, 12],
-        [12, 3],
-      ]),
-      '업무 공간 바닥(기본)',
-    ),
+  const workFloor = floorTile([
+    [4, 5],
+    [11, 9],
+    [7, 12],
+    [12, 3],
+  ])
+  const work: OfficeFrame[] = [
+    tile('tile_floor_0', workFloor, '업무 공간 바닥(기본)'),
     tile(
       'tile_floor_1',
       floorTile([
@@ -701,5 +603,10 @@ export function buildOfficeFrames(): OfficeFrame[] {
     furn('furn_papers', bottomCenter(16, 16, outlined(art(PAPERS))), '서류 더미(책상 위)'),
     furn('furn_window', bottomCenter(16, 16, outlined(art(WINDOW))), '창문(벽에 거는 것)'),
     furn('furn_corkboard', bottomCenter(16, 16, outlined(art(CORKBOARD))), '게시판(벽에 거는 것)'),
+  ]
+  // 나머지 방(자료실·서버실·회의실·휴게실·창가·로비) — 칸막이 합성 타일이 업무 공간 바닥 반쪽을 쓴다
+  return [
+    ...work,
+    ...buildRoomFrames({ workFloor, wallTop: wallTopTile(), wallBody: wallBodyTile(false) }),
   ]
 }

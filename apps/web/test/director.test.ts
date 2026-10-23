@@ -58,7 +58,7 @@ describe('director × fixtures/sample-session.jsonl', () => {
       'serverTerminal',
       'globe',
       'phone',
-      'coffee',
+      'sofaSit', // turn.end: 이벤트 id 해시로 소파 앉기(pickLoungeRest — 리플레이마다 같음)
       'shredder',
     ])
   })

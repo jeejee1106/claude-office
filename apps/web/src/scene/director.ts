@@ -14,8 +14,12 @@ import {
   errorReaction,
   type KindActivity,
   kindActivity,
+  LOUNGE_REST,
   type Mark,
+  pickLoungeRest,
   SLEEP_ACTIVITY,
+  SOFA_SLEEP_ACTIVITY,
+  type SofaUse,
   SPEECH_MS,
   type SpotRef,
   toolActivity,
@@ -46,6 +50,9 @@ export interface DirectorOptions {
   /** 팀 구성(기본: teams.ts 의 DEFAULT_TEAM_CONFIG). 나중에 "직원 설정" 화면이 넘긴다 */
   teams?: () => TeamConfig
 }
+
+/** 화이트보드 글씨를 기억하는 세션 수 상한 */
+const MAX_PLANNED_SESSIONS = 64
 
 interface CharInfo {
   agentId: string
@@ -79,6 +86,12 @@ export class Director {
   private readonly deskFreedAt = new Map<SpotId, number>()
   private lights = false
   private serversBusy = false
+  /**
+   * 계획(plan 도구)을 한 번이라도 한 세션(끝나면 지움). 상태(계약)에 없는 정보라 이벤트 열로 센다.
+   * 세션을 바꿨다 돌아와도 그 세션의 화이트보드는 다시 글씨가 보인다. 페이지를 새로 열면 모른다(빈 보드).
+   */
+  private readonly plannedSessions = new Set<string>()
+  private boardWritten = false
   private readonly lang: () => Lang
   private readonly teams: () => TeamConfig
 
@@ -105,6 +118,10 @@ export class Director {
     return this.lights
   }
 
+  boardWrittenNow(): boolean {
+    return this.boardWritten
+  }
+
   /** 상태대로 즉시 배치한다. 기존 캐릭터는 모두 제거 후 다시 만든다. */
   syncAll(state: OfficeState, sessionId: string | null): DirectorOutput[] {
     const out: DirectorOutput[] = []
@@ -121,10 +138,16 @@ export class Director {
     if (!open || session === undefined) {
       this.serversBusy = false
       out.push({ type: 'servers', busy: false, cause: 'sync' })
+      this.boardWritten = false
+      out.push({ type: 'board', written: false, cause: 'sync' })
       return out
     }
 
     const agents = Object.values(session.agents).filter((a) => a.activity !== 'gone')
+    // 화이트보드: 이 세션에서 계획을 했던 것을 기억하거나, 지금 누가 계획 중이면 글씨
+    if (agents.some((a) => a.currentTool?.category === 'plan')) this.rememberPlan(session.id)
+    this.boardWritten = this.plannedSessions.has(session.id)
+    out.push({ type: 'board', written: this.boardWritten, cause: 'sync' })
     agents.sort((a, b) => (a.id === MAIN_AGENT_ID ? -1 : b.id === MAIN_AGENT_ID ? 1 : 0))
     for (const agent of agents) {
       const info = this.createChar(agent.id, agent.type)
@@ -164,6 +187,19 @@ export class Director {
         this.lights = on
         out.push({ type: 'lights', on, cause })
       }
+    }
+
+    // 화이트보드 글씨: 계획을 한 번 하면 세션이 끝날 때까지 남는다
+    if (e.kind === 'session.end') {
+      this.plannedSessions.delete(e.sessionId)
+      this.setBoard(false, out, cause)
+    } else if (
+      e.kind === 'tool.start' &&
+      e.tool.category === 'plan' &&
+      session?.endedAt === undefined
+    ) {
+      this.rememberPlan(e.sessionId)
+      this.setBoard(true, out, cause)
     }
 
     if (act.subject === 'all') {
@@ -216,7 +252,11 @@ export class Director {
     // 이 이벤트로 결정되는 행동
     let effective: KindActivity = act
     if (e.kind === 'agent.idle' && agent !== undefined && isAsleep(agent, this.now())) {
-      effective = SLEEP_ACTIVITY
+      // 소파에 누워 있으면 그 자리에서 Zzz(SOFA_SLEEP_ACTIVITY 주석), 아니면 책상에서 졺
+      effective = info.spot === 'sofaLie' ? SOFA_SLEEP_ACTIVITY : SLEEP_ACTIVITY
+    } else if (e.kind === 'turn.end') {
+      // 한 턴 끝: 커피·소파 앉기·소파 눕기 중 하나(이벤트 id 로 결정, 소파 자리가 없으면 커피)
+      effective = LOUNGE_REST[pickLoungeRest(e.id, this.sofaUse(info))]
     }
 
     // 유지 표시(?, Zzz)는 새 이벤트가 오면 지운다(같은 표시를 다시 거는 경우 제외).
@@ -224,7 +264,7 @@ export class Director {
       out.push(this.markCmd(info, null, null, cause))
       info.persistentMark = null
     }
-    info.asleep = effective === SLEEP_ACTIVITY
+    info.asleep = effective === SLEEP_ACTIVITY || effective === SOFA_SLEEP_ACTIVITY
 
     // 서버실 LED: 지금 bash 를 실행 중인가(이 에이전트의 다른 이벤트가 오면 끝난 것으로 본다)
     info.bash = e.kind === 'tool.start' && e.tool.category === 'bash'
@@ -324,7 +364,8 @@ export class Director {
       const agent = session.agents[info.agentId]
       if (agent === undefined || info.asleep || !isAsleep(agent, now)) continue
       info.asleep = true
-      out.push(this.moveCmd(info, 'ownDesk', 'sleep', 'sleep', {}))
+      // 소파에 누워 있으면 그대로 Zzz 만(SOFA_SLEEP_ACTIVITY), 아니면 책상으로 가서 졺
+      if (info.spot !== 'sofaLie') out.push(this.moveCmd(info, 'ownDesk', 'sleep', 'sleep', {}))
       out.push(this.markCmd(info, 'sleep', null, 'sleep'))
       info.persistentMark = 'sleep'
     }
@@ -468,6 +509,33 @@ export class Director {
   /** 대사 후보 중 하나(이벤트 id 로 결정적) */
   private line(key: LineKey | undefined, seed: string): string | null {
     return key === undefined ? null : pickLine(key, seed, this.lang())
+  }
+
+  /** 나를 뺀 소파 사용 현황(앉은 수·누운 수) */
+  private sofaUse(info: CharInfo): SofaUse {
+    const others = (s: SpotId) => {
+      let n = 0
+      for (const id of this.occupancy.get(s)?.keys() ?? []) if (id !== info.agentId) n++
+      return n
+    }
+    return { sitting: others('sofaSit'), lying: others('sofaLie') }
+  }
+
+  private rememberPlan(sessionId: string): void {
+    this.plannedSessions.delete(sessionId)
+    this.plannedSessions.add(sessionId)
+    // 끝나지 않고 버려진 세션이 쌓이지 않게(오래된 것부터)
+    while (this.plannedSessions.size > MAX_PLANNED_SESSIONS) {
+      const oldest = this.plannedSessions.values().next().value
+      if (oldest === undefined) break
+      this.plannedSessions.delete(oldest)
+    }
+  }
+
+  private setBoard(written: boolean, out: DirectorOutput[], cause: string): void {
+    if (written === this.boardWritten) return
+    this.boardWritten = written
+    out.push({ type: 'board', written, cause })
   }
 
   private updateServers(out: DirectorOutput[], cause: string): void {
