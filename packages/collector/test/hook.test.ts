@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OfficeEvent, PATHS } from '@claude-office/shared'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -175,5 +176,49 @@ describe('claude-office-hook 프로세스', () => {
     const r = await runHook(fixture('Stop.json'), { CLAUDE_OFFICE_URL: 'ftp://nope' })
     expect(r.code).toBe(0)
     expect(r.stdout).toBe('')
+  })
+
+  it('PermissionRequest 는 보내지 않고, 이어진 Notification(permission_prompt)을 요청한 서브에이전트에 귀속', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'co-hook-perm-'))
+    const bodies: unknown[] = []
+    server = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        bodies.push(JSON.parse(body))
+        res.writeHead(202)
+        res.end()
+      })
+    })
+    await new Promise<void>((r) => server?.listen(0, '127.0.0.1', r))
+    const { port } = server.address() as AddressInfo
+    const env = {
+      CLAUDE_OFFICE_URL: `http://127.0.0.1:${port}/events`,
+      CLAUDE_OFFICE_STATE_DIR: stateDir,
+    }
+    try {
+      const sub = JSON.parse(fixture('PermissionRequest.subagent.json')) as Record<string, unknown>
+      expect((await runHook(JSON.stringify(sub), env)).code).toBe(0)
+      expect(bodies).toHaveLength(0)
+      await runHook(fixture('Notification.permission_prompt.json'), env)
+      expect(bodies.at(-1)).toMatchObject({
+        kind: 'attention',
+        reason: 'permission',
+        agentId: 'a4d1b0553338ecf74',
+      })
+      // 그 서브에이전트의 도구가 끝나면 요청은 지워지고, 다음 확인 창은 main 으로 간다
+      const post = {
+        hook_event_name: 'PostToolUse',
+        session_id: sub.session_id,
+        agent_id: sub.agent_id,
+        tool_name: 'Bash',
+        tool_use_id: 't-perm',
+      }
+      await runHook(JSON.stringify(post), env)
+      await runHook(fixture('Notification.permission_prompt.json'), env)
+      expect(bodies.at(-1)).toMatchObject({ kind: 'attention', agentId: 'main' })
+    } finally {
+      rmSync(stateDir, { recursive: true, force: true })
+    }
   })
 })
