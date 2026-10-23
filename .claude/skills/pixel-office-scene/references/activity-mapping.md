@@ -9,7 +9,7 @@
 
 | 방 | 스팟 | 들어 있는 것 |
 | --- | --- | --- |
-| 업무 공간 | `mainDesk`(창가 큰 책상), `desk1`~`desk4`, `globe`(창가 지구본), `phone`, `door`(로비·출입문) | 책상·모니터, 창문, 지구본, 전화기 |
+| 업무 공간 | `mainDesk`(팀장 큰 책상 — 위쪽, face `down`), 팀 자리 `research1·2`(조사팀) `planning1·2`(기획팀) `design1·2`(디자인팀) `dev1·2`(개발팀, face `up`), `globe`(창가 지구본), `phone`, `door`(로비·출입문) | 팀 간판 4개, 책상·의자, 창문, 지구본, 전화기 |
 | 자료실 | `bookshelf`, `cabinet`, `shredder` | 책장, 서류 캐비닛, 파쇄기 |
 | 서버실 | `serverTerminal` | 서버랙 5대(깜빡이는 LED), 터미널 콘솔·모니터, 바닥 케이블 |
 | 회의실 | `whiteboard`, `commonTable`(회의 테이블 — 서브 책상이 모자랄 때 공용 자리) | 화이트보드, 회의 테이블 |
@@ -40,8 +40,8 @@
 | --- | --- | --- |
 | `session.start` | 사무실 조명 켜짐, 메인 캐릭터가 문으로 등장해 자기 책상으로 | `sessionStart` "출근했습니다!" (등장할 때) |
 | `prompt.submit` | 자리에서 일어남 `idle_stand`(brief: 1.5초 뒤 자기 책상 `idle_sit`, soft) + 머리 위 "!" 0.8초 | `promptSubmit` "네, 알겠습니다!" |
-| `agent.spawn` | 새 캐릭터 문에서 등장(`spawning`) → 배정된 책상 | `subSpawn` "부르셨어요?" (등장할 때) |
-| `agent.finish` | 팀장 책상 쪽을 보고 `report` 0.4초 → 그 자리에 `idle_stand` 3초 머묾 → 문으로 퇴장 | `subFinish` "다녀왔습니다!" (퇴장 내내, 약 4.8초) |
+| `agent.spawn` | 새 캐릭터 문에서 등장(`spawning`) → 자기 팀 책상의 빈자리(`agentType` → 팀: `apps/web/src/scene/teams.ts`), 팀 책상이 다 차면 `commonTable` | `subSpawn` "부르셨어요?" (등장할 때) |
+| `agent.finish` | 팀장 책상 쪽을 보고 `report` 0.4초 → 그 자리에 `idle_stand` 3초 머묾 → 문으로 퇴장 | `subFinish` "퇴근하겠습니다!" (퇴장 내내, 약 4.8초) |
 | `turn.end` | 휴게실 커피머신으로 이동 후 `idle_drink` + 김 나는 컵 이펙트 | `turnEnd` "휴~" (도착할 때) |
 | `attention` | 해당 캐릭터 `raise_hand` + 깜빡이는 "?" (사용자 확인 필요) | `attention` "확인 부탁드려요!" |
 | `context.compact` | 자료실 파쇄기 앞 `shred` + 종이 조각 이펙트 | `compact` "정리 좀 할게요" (도착할 때) |

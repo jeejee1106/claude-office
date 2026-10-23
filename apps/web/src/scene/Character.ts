@@ -52,7 +52,7 @@ export const LEAVE_MAX_MS = 2000
 /** 도착 후 다음 명령으로 넘어가기 전 최소 머무는 시간 — 행동이 한 번은 보이도록 */
 export const MIN_DWELL_MS = 350
 /**
- * style 있는 퇴장(세션 종료 "퇴근하겠습니다!", 서브 완료 "다녀왔습니다!"):
+ * style 있는 퇴장(세션 종료 "퇴근하겠습니다!", 서브 완료 퇴근 인사):
  * 준비 동작 LEAVE_PREP_MS → (report 만) 그 자리에 REPORT_LINGER_MS 머묾
  * → 정해진 시간 LEAVE_WALK_MS 동안 걸어 나감 → 페이드 FADE_MS.
  * - pack:   0.4 + 1.1 + 0.3 = 1.8초 < LEAVE_MAX_MS(2초)

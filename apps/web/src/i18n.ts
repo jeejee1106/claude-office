@@ -5,6 +5,8 @@
  * 언어 선택은 뷰어별 편의 설정이므로 localStorage 에만 둔다(서버 상태 아님).
  */
 
+import type { TeamId } from './scene/teams'
+
 export type Lang = 'ko' | 'en'
 export const LANGS: readonly Lang[] = ['ko', 'en']
 
@@ -30,7 +32,7 @@ export const LINES: Readonly<Record<Lang, Readonly<Record<LineKey, readonly stri
     sessionStart: ['출근했습니다!', '좋은 아침입니다!', '오늘도 힘내 보겠습니다!'],
     promptSubmit: ['네, 알겠습니다!', '바로 할게요!', '맡겨 주세요!'],
     subSpawn: ['부르셨어요?', '네, 팀장님!', '무슨 일이세요?'],
-    subFinish: ['다녀왔습니다!', '보고드립니다!', '끝났습니다!'],
+    subFinish: ['퇴근하겠습니다!', '먼저 들어가 보겠습니다!', '오늘 일 끝! 퇴근합니다!'],
     error: ['앗…', '어라…', '앗, 이런…'],
     errorRepeated: ['이상하다…', '왜 안 되지…', '이게 왜…'],
     attention: ['확인 부탁드려요!', '확인해 주세요!', '이거 해도 될까요?'],
@@ -42,7 +44,7 @@ export const LINES: Readonly<Record<Lang, Readonly<Record<LineKey, readonly stri
     sessionStart: ['Clocking in!', 'Good morning!', "Let's do this!"],
     promptSubmit: ['On it!', 'Got it!', 'Leave it to me!'],
     subSpawn: ['You called?', 'Yes, boss!', "What's up?"],
-    subFinish: ["I'm back!", 'Reporting in!', 'All done!'],
+    subFinish: ['Heading home!', 'Signing off!', 'Done for today!'],
     error: ['Oops…', 'Uh-oh…', 'Huh…'],
     errorRepeated: ['That’s odd…', 'Why won’t it work…', 'Not again…'],
     attention: ['Please check this!', 'Need your OK!', 'May I go ahead?'],
@@ -116,6 +118,10 @@ export const UI = {
     evCompact: '컨텍스트 정리',
     evIdle: '쉬는 중',
     evUnknown: '알 수 없는 이벤트',
+    teamResearch: '조사팀',
+    teamPlanning: '기획팀',
+    teamDesign: '디자인팀',
+    teamDev: '개발팀',
     locale: 'ko-KR',
   },
   en: {
@@ -153,6 +159,10 @@ export const UI = {
     evCompact: 'Context compacted',
     evIdle: 'Resting',
     evUnknown: 'Unknown event',
+    teamResearch: 'Research',
+    teamPlanning: 'Planning',
+    teamDesign: 'Design',
+    teamDev: 'Dev Team',
     locale: 'en-US',
   },
 } as const satisfies Record<Lang, Record<string, string>>
@@ -161,6 +171,18 @@ export type UiKey = keyof (typeof UI)['ko']
 
 export function t(key: UiKey, lang: Lang = getLang()): string {
   return UI[lang][key]
+}
+
+const TEAM_KEYS: Readonly<Record<TeamId, UiKey>> = {
+  research: 'teamResearch',
+  planning: 'teamPlanning',
+  design: 'teamDesign',
+  dev: 'teamDev',
+}
+
+/** 팀 간판 글자: "조사팀" / "Research" (기획서 3절 팀 구역) */
+export function teamName(team: TeamId, lang: Lang = getLang()): string {
+  return t(TEAM_KEYS[team], lang)
 }
 
 /** 층 탭 이름: "1층 claude-office" / "1F claude-office" */

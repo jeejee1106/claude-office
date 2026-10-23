@@ -21,7 +21,8 @@ import {
 } from './activityMap'
 import { LEAVE_REPORT_MAX_MS } from './Character'
 import type { CharacterCommand, DirectorOutput } from './commands'
-import { SPOTS, type SpotId, SUB_DESKS } from './layout'
+import { SPOTS, type SpotId, teamDesks } from './layout'
+import { DEFAULT_TEAM_CONFIG, type TeamConfig, teamOf } from './teams'
 import { variantFor } from './variant'
 
 /*
@@ -41,6 +42,8 @@ export interface DirectorOptions {
   now?: () => number
   /** 대사 언어(기본: 사용자가 고른 언어) */
   lang?: () => Lang
+  /** 팀 구성(기본: teams.ts 의 DEFAULT_TEAM_CONFIG). 나중에 "직원 설정" 화면이 넘긴다 */
+  teams?: () => TeamConfig
 }
 
 interface CharInfo {
@@ -76,10 +79,12 @@ export class Director {
   private lights = false
   private serversBusy = false
   private readonly lang: () => Lang
+  private readonly teams: () => TeamConfig
 
   constructor(opts: DirectorOptions = {}) {
     this.now = opts.now ?? Date.now
     this.lang = opts.lang ?? getLang
+    this.teams = opts.teams ?? (() => DEFAULT_TEAM_CONFIG)
   }
 
   serversBusyNow(): boolean {
@@ -341,7 +346,7 @@ export class Director {
       agentId,
       variant: variantFor(agentId, agentType),
       label: agentId === MAIN_AGENT_ID ? 'main' : (agentType ?? agentId.slice(0, 8)),
-      desk: this.assignDesk(agentId),
+      desk: this.assignDesk(agentId, agentType),
       spot: null,
       slot: 0,
       persistentMark: null,
@@ -353,15 +358,18 @@ export class Director {
     return info
   }
 
-  /** 메인은 창가 큰 책상, 서브는 빈 책상을 순서대로, 모자라면 공용 테이블 */
-  private assignDesk(agentId: string): SpotId {
+  /**
+   * 메인은 팀장 큰 책상, 서브는 자기 팀(agentType → teams.ts) 책상의 빈자리를 순서대로,
+   * 팀 책상이 다 차면 공용 테이블(회의실)
+   */
+  private assignDesk(agentId: string, agentType: string | undefined): SpotId {
     if (agentId === MAIN_AGENT_ID) return 'mainDesk'
     const now = this.now()
     const lingering = (d: SpotId) => {
       const t = this.deskFreedAt.get(d)
       return t !== undefined && now - t < LEAVE_REPORT_MAX_MS
     }
-    const free = SUB_DESKS.filter((d) => !this.deskOwner.has(d))
+    const free = teamDesks(teamOf(agentType, this.teams())).filter((d) => !this.deskOwner.has(d))
     const d = free.find((d) => !lingering(d)) ?? free[0]
     if (d === undefined) return 'commonTable'
     this.deskOwner.set(d, agentId)

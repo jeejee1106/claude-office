@@ -1,10 +1,12 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 import { decodePng, PixelImage } from './canvas'
+import type { OfficeAtlas } from './officeSheet'
 import { VARIANT_COUNT } from './palette'
 import { OUTPUT_DIR, REPO_ROOT } from './paths'
 import type { PixiAtlas } from './sheet'
 import { ALL_DIRS } from './sprites/character'
+import { buildOfficeFrames } from './sprites/office'
 import { offPalettePixels } from './validate'
 
 /*
@@ -12,6 +14,8 @@ import { offPalettePixels } from './validate'
  *   - 씬이 요구하는 애니메이션: apps/web/src/scene/activityMap.ts 의 ANIMATIONS
  *   - 매핑표 "필요한 애니메이션 목록": .claude/skills/pixel-office-scene/references/activity-mapping.md
  *   - 변형 수: apps/web/src/scene/variant.ts 의 VARIANT_COUNT
+ *   - office 시트: 디스크의 office.png/json 이 생성 스크립트와 같은지, 크기 16 배수·앵커·팔레트
+ *   - apps/web/src 가 이름으로 부르는 furn_/tile_/ui_ 프레임이 시트에 있는지(없으면 경고)
  * 실행: pnpm --filter @claude-office/assets verify  (build 뒤)
  */
 
@@ -84,11 +88,63 @@ for (let v = 0; v < sceneVariants; v++) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// office 시트: 디스크 산출물이 지금 생성 스크립트와 같은지 + 규격(16 배수, 앵커, 팔레트)
+// ---------------------------------------------------------------------------
+const officeAtlas = JSON.parse(
+  readFileSync(resolve(OUTPUT_DIR, 'office.json'), 'utf8'),
+) as OfficeAtlas
+const officeSheet = decodePng(readFileSync(resolve(OUTPUT_DIR, officeAtlas.meta.image)))
+if (officeSheet.width !== officeAtlas.meta.size.w || officeSheet.height !== officeAtlas.meta.size.h)
+  errors.push('office: meta.size does not match the PNG')
+const officeBad = offPalettePixels(officeSheet)
+if (officeBad.length) errors.push(`office: off-palette pixels: ${officeBad.join(', ')}`)
+const expected = buildOfficeFrames()
+for (const f of expected) {
+  const a = officeAtlas.frames[f.name]
+  if (!a) {
+    errors.push(`office: missing frame ${f.name} (run build)`)
+    continue
+  }
+  const { x, y, w, h } = a.frame
+  if (w % 16 || h % 16) errors.push(`office: ${f.name} is ${w}x${h}, not a multiple of 16`)
+  if (!a.anchor) errors.push(`office: ${f.name} has no anchor`)
+  if (x + w > officeSheet.width || y + h > officeSheet.height) {
+    errors.push(`office: ${f.name} frame rect outside the sheet`)
+    continue
+  }
+  const disk = new PixelImage(w, h)
+  for (let j = 0; j < h; j++)
+    for (let i = 0; i < w; i++) disk.set(i, j, officeSheet.get(x + i, y + j))
+  if (!disk.equals(f.image))
+    errors.push(`office: ${f.name} on disk differs from the script (run build)`)
+}
+for (const n of Object.keys(officeAtlas.frames))
+  if (!expected.some((f) => f.name === n)) errors.push(`office: stale frame ${n} (run build)`)
+
+// 씬 코드가 이름으로 부르는 furn_/tile_/ui_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
+const warnings: string[] = []
+const known = new Set([...Object.keys(officeAtlas.frames), ...Object.keys(atlas.frames)])
+function scan(dir: string) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name)
+    if (e.isDirectory()) scan(p)
+    else if (/\.(ts|tsx)$/.test(e.name))
+      for (const m of readFileSync(p, 'utf8').matchAll(/['"`]((?:furn|tile|ui)_[a-z0-9_]+)['"`]/g))
+        if (!known.has(m[1] as string))
+          warnings.push(`${relative(REPO_ROOT, p)}: '${m[1]}' not in any sheet`)
+  }
+}
+scan(resolve(REPO_ROOT, 'apps/web/src'))
+if (warnings.length)
+  console.warn(`verify warnings (${warnings.length}):\n  ${warnings.join('\n  ')}`)
+
 if (errors.length) {
   console.error(`verify FAILED (${errors.length}):\n  ${errors.slice(0, 40).join('\n  ')}`)
   process.exit(1)
 }
 console.log(
   `verify OK: ${required.length} animations (${required.join(', ')}) x ${ALL_DIRS.length} dirs x ` +
-    `${sceneVariants} variants, ${checked} frames checked, 0 off-palette pixels`,
+    `${sceneVariants} variants, ${checked} frames checked; office ${expected.length} frames match the script; ` +
+    '0 off-palette pixels',
 )

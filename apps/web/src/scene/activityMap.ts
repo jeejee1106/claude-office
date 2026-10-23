@@ -40,7 +40,7 @@ export type AnimName = (typeof ANIMATIONS)[number]
 /** 대사 말풍선 표시 시간(기획서 6절: 도구 사용이 없는 순간에 1~2초). brief 행동도 이 시간만큼 */
 export const SPEECH_MS = 1500
 
-/** 'ownDesk' 는 director 가 에이전트별 책상(메인: mainDesk, 서브: desk1..4/commonTable)으로 푼다. */
+/** 'ownDesk' 는 director 가 에이전트별 책상(메인: mainDesk, 서브: 자기 팀 책상 research1..dev3 / 모자라면 commonTable)으로 푼다. */
 export type SpotRef = SpotId | 'ownDesk'
 
 /**
@@ -186,7 +186,7 @@ export const KIND_ACTIVITY: Readonly<Record<OfficeEventKind, KindActivity>> = {
     anim: 'idle_sit',
     line: 'subSpawn',
   },
-  // 팀장 쪽을 보고 보고("다녀왔습니다!") 후 문으로 퇴장
+  // 팀장 쪽을 보고 보고 후 퇴근 인사("퇴근하겠습니다!")와 함께 문으로 퇴장
   'agent.finish': { subject: 'self', motion: 'leave', line: 'subFinish', leaveStyle: 'report' },
   // 휴게실 커피머신에서 idle_drink + 김 나는 컵("휴~")
   'turn.end': {

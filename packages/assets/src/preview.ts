@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { encodePng, PixelImage } from './canvas'
+import { packOffice } from './officeSheet'
 import { PREVIEW_PATH } from './paths'
 import { buildCharacterSheet } from './sheet'
 import { ACTIONS, ALL_DIRS, FRAME_H, FRAME_W } from './sprites/character'
@@ -9,6 +10,7 @@ import { ACTIONS, ALL_DIRS, FRAME_H, FRAME_W } from './sprites/character'
  * 미리보기: 프레임을 정수 배율로 확대해 한 장에 모은다(생성물, git 에 넣지 않음).
  *   위: variant 0 의 전체 행동. 한 줄 = 행동 하나(ACTIONS 순서), 왼쪽부터 down | up | left | right.
  *   아래: 변형 0..7 의 idle_stand 4방향 + walk_left 4프레임.
+ *   맨 아래: office 시트 전체(아틀라스 배치 그대로, 체커 바탕 = 투명). --only 를 주면 생략.
  * 옵션: --scale=N (기본 4) --variant=N --only=walk,type --out=경로
  */
 
@@ -81,5 +83,23 @@ if (variantRows) {
   }
 }
 
-writeFileSync(out, encodePng(img))
-console.log(`preview: ${width}x${height}px (scale ${scale}) -> ${out}`)
+// office 시트: 시트 배치 그대로 확대(투명은 회색 체커로 보이게)
+let final = img
+if (!only) {
+  const office = packOffice().image
+  const ow = office.width * scale
+  const oh = office.height * scale
+  final = new PixelImage(Math.max(width, ow + PAD * 2), height + oh + PAD * 2)
+  final.blit(img, 0, 0)
+  for (let y = height; y < final.height; y++)
+    for (let x = 0; x < final.width; x++)
+      final.set(
+        x,
+        y,
+        (Math.floor(x / (scale * 4)) + Math.floor(y / (scale * 4))) % 2 ? 0xc9c9d1ff : 0xb4b4bfff,
+      )
+  final.blit(office, PAD, height + PAD, scale)
+}
+
+writeFileSync(out, encodePng(final))
+console.log(`preview: ${final.width}x${final.height}px (scale ${scale}) -> ${out}`)

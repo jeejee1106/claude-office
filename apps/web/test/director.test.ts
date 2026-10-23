@@ -89,12 +89,12 @@ describe('director × fixtures/sample-session.jsonl', () => {
     expect(sub[0]).toMatchObject({ type: 'spawn', cause: 'e10' })
     const path = sub
       .filter((c) => c.type !== 'mark')
-      .filter((c) => !(c.type === 'moveTo' && c.spot === 'desk1'))
+      .filter((c) => !(c.type === 'moveTo' && c.spot === 'research1'))
       .map((c) => (c.type === 'moveTo' ? c.spot : c.type))
     expect(path).toEqual(['spawn', 'cabinet', 'bookshelf', 'leave'])
-    // 서브는 빈 책상을 배정받고 agentType 해시 색
+    // 서브(Explore)는 조사팀 책상의 빈자리를 배정받고 agentType 해시 색
     expect(sub.find((c) => c.type === 'moveTo' && c.cause === 'e10')).toMatchObject({
-      spot: 'desk1',
+      spot: 'research1',
     })
     expect(sub[0]).toMatchObject({ variant: variantFor('sub-a', 'Explore') })
   })
@@ -187,21 +187,75 @@ describe('director × fixtures/sample-session.jsonl', () => {
 })
 
 describe('director 시나리오', () => {
-  it('서브에이전트 책상은 순서대로, 모자라면 공용 테이블', () => {
-    const subs = ['a', 'b', 'c', 'd', 'e', 'f']
+  it('서브에이전트는 자기 팀 책상을 순서대로, 팀 책상이 다 차면 공용 테이블', () => {
+    // 종류를 모르는 서브는 개발팀(fallback)
+    const subs = ['a', 'b', 'c', 'd']
     const { director } = run([
       ev({ kind: 'session.start' }),
       ...subs.map((id) => ev({ kind: 'agent.spawn', agentId: id, parentAgentId: 'main' })),
     ])
     expect(subs.map((id) => director.deskOf(id))).toEqual([
-      'desk1',
-      'desk2',
-      'desk3',
-      'desk4',
+      'dev1',
+      'dev2',
       'commonTable',
       'commonTable',
     ])
     expect(director.deskOf('main')).toBe('mainDesk')
+  })
+
+  it('팀 매핑: Explore→조사팀, Plan→기획팀, pixel-artist→디자인팀, 그 밖→개발팀', () => {
+    const spawn = (id: string, agentType: string) =>
+      ev({ kind: 'agent.spawn', agentId: id, parentAgentId: 'main', agentType })
+    const { director } = run([
+      ev({ kind: 'session.start' }),
+      spawn('x1', 'Explore'),
+      spawn('x2', 'Explore'),
+      spawn('x3', 'Explore'),
+      spawn('p1', 'Plan'),
+      spawn('d1', 'pixel-artist'),
+      spawn('g1', 'general-purpose'),
+      spawn('o1', 'office-scene-dev'),
+      spawn('z1', 'some-new-agent'),
+    ])
+    expect(director.deskOf('x1')).toBe('research1')
+    expect(director.deskOf('x2')).toBe('research2')
+    // 팀 책상이 다 차면 다른 팀 책상이 비어 있어도 공용 테이블(기존 규칙)
+    expect(director.deskOf('x3')).toBe('commonTable')
+    expect(director.deskOf('p1')).toBe('planning1')
+    expect(director.deskOf('d1')).toBe('design1')
+    expect(director.deskOf('g1')).toBe('dev1')
+    expect(director.deskOf('o1')).toBe('dev2')
+    expect(director.deskOf('z1')).toBe('commonTable')
+  })
+
+  it('Edit/Write 의 "자기 책상"은 팀 책상, 팀장은 팀장 책상', () => {
+    const { all } = run([
+      ev({ kind: 'session.start' }),
+      ev({ kind: 'agent.spawn', agentId: 'p', parentAgentId: 'main', agentType: 'Plan' }),
+      ev({ kind: 'tool.start', agentId: 'p', tool: { name: 'Edit', category: 'edit' } }),
+      ev({ kind: 'tool.start', tool: { name: 'Write', category: 'write' } }),
+    ])
+    const edits = all.flatMap((c) => (c.type === 'moveTo' && c.anim === 'type' ? [c] : []))
+    expect(edits.map((c) => [c.agentId, c.spot])).toEqual([
+      ['p', 'planning1'],
+      ['main', 'mainDesk'],
+    ])
+  })
+
+  it('팀 구성은 옵션으로 바꿀 수 있다(직원 설정 화면 대비)', () => {
+    const director = new Director({
+      teams: () => ({ members: { Explore: 'design' }, fallback: 'research' }),
+    })
+    let state: OfficeState = createInitialState()
+    for (const e of [
+      ev({ kind: 'agent.spawn', agentId: 'a', agentType: 'Explore' }),
+      ev({ kind: 'agent.spawn', agentId: 'b', agentType: 'Plan' }),
+    ]) {
+      state = reduce(state, e)
+      director.handle(e, state.sessions[e.sessionId])
+    }
+    expect(director.deskOf('a')).toBe('design1')
+    expect(director.deskOf('b')).toBe('research1')
   })
 
   /** 이벤트 ts 를 director 시계로 쓰는 run */
@@ -225,7 +279,7 @@ describe('director 시나리오', () => {
       ev({ kind: 'agent.finish', agentId: 'a', ts: at(1) }),
       ev({ kind: 'agent.spawn', agentId: 'b', ts: at(1 + LEAVE_REPORT_MAX_MS / 1000) }),
     ])
-    expect(director.deskOf('b')).toBe('desk1')
+    expect(director.deskOf('b')).toBe('dev1')
   })
 
   it('보고 후 머무는 서브의 책상은 피한다(겹치지 않게), 빈 책상이 그것뿐이면 쓴다', () => {
@@ -236,15 +290,16 @@ describe('director 시나리오', () => {
       // 같은 ID 재사용(재개)도 새 책상
       ev({ kind: 'agent.spawn', agentId: 'a', ts: at(2.5) }),
     ])
-    expect(d1.deskOf('b')).toBe('desk2')
-    expect(d1.deskOf('a')).toBe('desk3')
+    expect(d1.deskOf('b')).toBe('dev2')
+    // 남은 팀 책상이 머무는 중인 그것뿐 → 그 책상을 쓴다
+    expect(d1.deskOf('a')).toBe('dev1')
 
     const d2 = runTimed([
-      ...['a', 'b', 'c', 'd'].map((id) => ev({ kind: 'agent.spawn', agentId: id, ts: at(0) })),
+      ...['a', 'b'].map((id) => ev({ kind: 'agent.spawn', agentId: id, ts: at(0) })),
       ev({ kind: 'agent.finish', agentId: 'b', ts: at(1) }),
       ev({ kind: 'agent.spawn', agentId: 'e', ts: at(2) }),
     ])
-    expect(d2.deskOf('e')).toBe('desk2')
+    expect(d2.deskOf('e')).toBe('dev2')
   })
 
   it('같은 스팟에 여럿이 가면 서로 다른 슬롯', () => {
@@ -329,7 +384,7 @@ describe('director 시나리오', () => {
       expect.objectContaining({
         type: 'place',
         agentId: 'a',
-        spot: 'desk1',
+        spot: 'research1',
         anim: 'raise_hand',
         mark: 'question',
       }),

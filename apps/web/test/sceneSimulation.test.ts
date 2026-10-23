@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { allLines, LINES } from '../src/i18n'
 import type { AnimName, Mark } from '../src/scene/activityMap'
 import { ERROR_REACTION_MS, SPEECH_MS, toolActivity } from '../src/scene/activityMap'
-import { LEAVE_REPORT_MAX_MS } from '../src/scene/Character'
+import { LEAVE_PREP_MS, LEAVE_REPORT_MAX_MS, REPORT_LINGER_MS } from '../src/scene/Character'
 import { isCharacterCommand } from '../src/scene/commands'
 import { Director } from '../src/scene/director'
 import type { CharacterView } from '../src/scene/render/types'
@@ -265,7 +265,11 @@ describe('1배속 샘플 세션 시뮬레이션 (씬 = 서버 상태의 투영)'
       })
 
       it('agent.finish 후 서브가 보고하고 3초 넘게 머문 뒤 사라진다', () => {
-        expect(r.subLingerMs).toBeGreaterThanOrEqual(3400)
+        // 보고(0.4초) + 머묾(3초). 1fps 는 1초 간격으로만 보이므로(캐릭터 시계가 한 프레임 늦게
+        // 명령을 받는다) 머묾 3초만큼 보이면 된다 — 자리 위치·이동 거리에 따라 한 프레임씩 달라진다.
+        expect(r.subLingerMs).toBeGreaterThanOrEqual(
+          frameMs >= 1000 ? REPORT_LINGER_MS : LEAVE_PREP_MS + REPORT_LINGER_MS,
+        )
         expect(r.subLingerMs).toBeLessThanOrEqual(REPORT_LEAVE_BUDGET_MS)
       })
 

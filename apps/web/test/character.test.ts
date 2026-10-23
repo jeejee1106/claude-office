@@ -29,6 +29,7 @@ import {
   ROWS,
   roomAt,
   SPOTS,
+  SUB_DESKS,
   spotPosition,
   TILE,
 } from '../src/scene/layout'
@@ -159,7 +160,7 @@ describe('Character 상태 머신', () => {
       cause: 'sync',
       variant: 1,
       label: 'a',
-      spot: 'desk1',
+      spot: 'research1',
       slot: 0,
       anim: 'idle_sit',
       bubble: null,
@@ -289,7 +290,13 @@ describe('퇴근(세션 종료) 퇴장', () => {
     const view = new FakeView()
     const c = new Character('a', view)
     c.enqueue({ ...place('cabinet'), agentId: 'a' })
-    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    c.enqueue({
+      type: 'leave',
+      agentId: 'a',
+      cause: 'fin',
+      say: '퇴근하겠습니다!',
+      style: 'report',
+    })
     c.update(16)
     expect(view.anim).toBe('report')
     expect(c.dir).toBe('right') // 자료실 캐비닛 → 업무 공간 창가 책상은 오른쪽
@@ -301,7 +308,13 @@ describe('퇴근(세션 종료) 퇴장', () => {
     c.enqueue({ ...place('cabinet'), agentId: 'a' })
     c.update(16)
     const here = { ...view.pos }
-    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    c.enqueue({
+      type: 'leave',
+      agentId: 'a',
+      cause: 'fin',
+      say: '퇴근하겠습니다!',
+      style: 'report',
+    })
     let t = 0
     let lingerMs = 0
     let shown = 0
@@ -315,7 +328,7 @@ describe('퇴근(세션 종료) 퇴장', () => {
         expect(c.dir).toBe('right') // 팀장 쪽을 본 채
       }
       if (leftAt === null && (view.pos.x !== here.x || view.pos.y !== here.y)) leftAt = t
-      if (view.bubble === '다녀왔습니다!' && view.alpha > 0) shown += 16
+      if (view.bubble === '퇴근하겠습니다!' && view.alpha > 0) shown += 16
     }
     expect(c.isGone).toBe(true)
     expect(lingerMs).toBeGreaterThanOrEqual(REPORT_LINGER_MS - 16)
@@ -332,8 +345,14 @@ describe('퇴근(세션 종료) 퇴장', () => {
 
   it('보고 퇴장: 1fps(큰 dt) 여도 LEAVE_REPORT_MAX_MS 안에 사라진다', () => {
     const c = new Character('a', new FakeView())
-    c.enqueue({ ...place('desk1'), agentId: 'a' })
-    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    c.enqueue({ ...place('research1'), agentId: 'a' })
+    c.enqueue({
+      type: 'leave',
+      agentId: 'a',
+      cause: 'fin',
+      say: '퇴근하겠습니다!',
+      style: 'report',
+    })
     let t = 0
     while (!c.isGone && t < 10_000) {
       c.update(1000)
@@ -346,8 +365,14 @@ describe('퇴근(세션 종료) 퇴장', () => {
   it('hurryLeave: 머무는 중이면 바로 문으로 나가 LEAVE_MAX_MS 안에 사라진다', () => {
     const view = new FakeView()
     const c = new Character('a', view)
-    c.enqueue({ ...place('desk1'), agentId: 'a' })
-    c.enqueue({ type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' })
+    c.enqueue({ ...place('research1'), agentId: 'a' })
+    c.enqueue({
+      type: 'leave',
+      agentId: 'a',
+      cause: 'fin',
+      say: '퇴근하겠습니다!',
+      style: 'report',
+    })
     runFor(c, 1000)
     expect(view.anim).toBe('idle_stand')
     c.hurryLeave()
@@ -370,10 +395,10 @@ describe('퇴근(세션 종료) 퇴장', () => {
     roster.dispatch([
       { type: 'lights', on: true, cause: 's' },
       place('mainDesk'),
-      { ...place('desk1'), agentId: 'a' },
+      { ...place('research1'), agentId: 'a' },
     ])
     roster.dispatch([
-      { type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' },
+      { type: 'leave', agentId: 'a', cause: 'fin', say: '퇴근하겠습니다!', style: 'report' },
     ])
     for (let i = 0; i < 10; i++) roster.update(50) // 0.5초: 머무는 중
     expect(roster.departing).toHaveLength(1)
@@ -395,9 +420,9 @@ describe('퇴근(세션 종료) 퇴장', () => {
       () => new FakeView(),
       () => {},
     )
-    roster.dispatch([{ ...place('desk1'), agentId: 'a' }])
+    roster.dispatch([{ ...place('research1'), agentId: 'a' }])
     roster.dispatch([
-      { type: 'leave', agentId: 'a', cause: 'fin', say: '다녀왔습니다!', style: 'report' },
+      { type: 'leave', agentId: 'a', cause: 'fin', say: '퇴근하겠습니다!', style: 'report' },
     ])
     roster.update(1000)
     expect(roster.visibleCount).toBe(1)
@@ -438,7 +463,7 @@ describe('layout · pathfinding', () => {
     expect(room('cabinet')).toBe('archive')
     expect(room('whiteboard')).toBe('meeting')
     expect(room('coffee')).toBe('lounge')
-    for (const id of ['mainDesk', 'desk1', 'desk2', 'desk3', 'desk4', 'globe', 'door'] as const)
+    for (const id of ['mainDesk', ...SUB_DESKS, 'globe', 'phone', 'door'] as const)
       expect(room(id), id).toBe('work')
     // 서버실: 서버랙 여러 대, 터미널, 케이블
     const inServer = PROPS.filter((p) => roomAt({ col: p.col, row: p.row + p.h - 1 }) === 'server')

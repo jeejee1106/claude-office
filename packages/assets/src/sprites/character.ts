@@ -265,7 +265,7 @@ export const ACTIONS: readonly ActionDef[] = [
     },
   },
   {
-    // 타이핑(책상·서버 터미널 공용, 서서 친다)
+    // 타이핑(책상·서버 터미널 공용). up·left·right 는 서서, down 은 앉아서 친다
     name: 'type',
     frameMs: 120,
     frames: (dir) => {
@@ -279,11 +279,13 @@ export const ACTIONS: readonly ActionDef[] = [
           { expr: 'down', arms: [sideReach(15, 3)] },
           { expr: 'down', arms: [sideReach(15, 3, 14)] },
         ]
+      // 정면(down)은 팀장 큰 책상 뒤에서 직원 쪽을 보고 치는 모습이라 앉아서 친다
+      // (idle_sit_down 과 머리 높이가 같아 쉬기↔타이핑 전환 때 머리가 튀지 않음. 서버 터미널은 up 만 씀)
       const armL = (handY: number) => merge(rect(4, 13, 1, 2, 'c'), rect(5, handY, 2, 1, 's'))
       const armR = (handY: number) => merge(rect(11, 13, 1, 2, 'C'), rect(9, handY, 2, 1, 's'))
       return [
-        { expr: 'down', arms: [armL(15), armR(16)] },
-        { expr: 'down', arms: [armL(16), armR(15)] },
+        { legs: 'sit', dy: SEAT_DY, expr: 'down', arms: [armL(15), armR(16)] },
+        { legs: 'sit', dy: SEAT_DY, expr: 'down', arms: [armL(16), armR(15)] },
       ]
     },
   },
