@@ -110,7 +110,8 @@ export class OfficeScene {
       (variant) => renderer.createCharacter(variant),
       (cmd) => {
         if (cmd.type === 'lights') renderer.setLights(cmd.on)
-        else renderer.setServerBusy(cmd.busy)
+        else if (cmd.type === 'servers') renderer.setServerBusy(cmd.busy)
+        else renderer.setBoardWritten(cmd.written)
       },
     )
 
@@ -218,8 +219,8 @@ export class OfficeScene {
 }
 
 /**
- * 렌더러 교체 지점. 지금은 캐릭터만 아틀라스 스프라이트(있을 때)이고 방·가구·표시는 코드로 그린다.
- * 가구·바닥 아틀라스가 생기면 여기서 함께 넘긴다.
+ * 렌더러 교체 지점. 캐릭터(characters.json)와 층 전체 바닥·벽·가구(office.json)는 아틀라스가 있으면
+ * 스프라이트, 빠진 조각은 코드 그림. 머리 위 표시·캐릭터 이펙트는 코드로 그린다.
  */
 function createRenderer(
   layers: ConstructorParameters<typeof PlaceholderRenderer>[0],
@@ -230,7 +231,7 @@ function createRenderer(
   return new PlaceholderRenderer(layers, overlay, atlas, office)
 }
 
-/** office.json(+png) 로드 — 업무 공간 바닥·벽·가구. 실패하면 경고만 남기고 null(코드로 그린다) */
+/** office.json(+png) 로드 — 층 전체 바닥·벽·가구. 실패하면 경고만 남기고 null(코드로 그린다) */
 async function loadOfficeAtlas(): Promise<OfficeAtlas<Texture> | null> {
   const url = `${import.meta.env.BASE_URL}${OFFICE_ATLAS_URL}`
   try {

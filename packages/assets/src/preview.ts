@@ -28,7 +28,17 @@ const out = args.get('out') ? resolve(args.get('out') as string) : PREVIEW_PATH
 const sheet = buildCharacterSheet()
 const byName = new Map(sheet.frames.map((f) => [f.name, f.image]))
 const actions = ACTIONS.filter((a) => !only || only.includes(a.name))
-const maxFrames = Math.max(...actions.map((a) => a.frames('down').length), 4)
+// 칸 수 = 프레임 폭 합(16px 단위) — sofa_lie(32px) 는 칸 2개를 쓴다
+const span = (img: PixelImage) => Math.ceil(img.width / FRAME_W)
+const maxFrames = Math.max(
+  ...actions.map((a) =>
+    (sheet.animations[`char_${variant}_${a.name}_down`] ?? []).reduce(
+      (n, name) => n + span(byName.get(name) as PixelImage),
+      0,
+    ),
+  ),
+  4,
+)
 
 const CELL_W = FRAME_W * scale + scale
 const CELL_H = FRAME_H * scale + scale
@@ -53,16 +63,20 @@ function cell(name: string, col: number, row: number, dirIndex: number) {
   if (!frame) return
   const x = PAD + dirIndex * (maxFrames * CELL_W + DIR_GAP) + col * CELL_W
   const y = PAD + row * CELL_H
-  img.fill(x, y + FRAME_H * scale, FRAME_W * scale, 1, BASE)
-  img.blit(frame, x, y, scale)
+  // 발끝선 = 프레임 아래 끝(앵커). 키가 작은 프레임(sofa_lie)은 칸 아래에 붙인다
+  const top = y + (FRAME_H - frame.height) * scale
+  img.fill(x, y + FRAME_H * scale, frame.width * scale, 1, BASE)
+  img.blit(frame, x, top, scale)
 }
 
 actions.forEach((a, row) => {
   ALL_DIRS.forEach((dir, di) => {
     const names = sheet.animations[`char_${variant}_${a.name}_${dir}`] ?? []
-    names.forEach((n, col) => {
+    let col = 0
+    for (const n of names) {
       cell(n, col, row, di)
-    })
+      col += span(byName.get(n) as PixelImage)
+    }
   })
 })
 

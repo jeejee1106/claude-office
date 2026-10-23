@@ -1,4 +1,4 @@
-import { grid, type Layer, merge, rect, shift } from './layers'
+import { compose, grid, type Key, type KeyFrame, type Layer, merge, rect, shift } from './layers'
 
 /*
  * 사무실 직원 캐릭터 (16×24 프레임, 발끝 앵커 0.5, 1).
@@ -21,7 +21,8 @@ export const ALL_DIRS = ['down', 'up', 'left', 'right'] as const
 export type Dir = (typeof ALL_DIRS)[number]
 
 type Expr = 'open' | 'closed' | 'squeeze' | 'wide' | 'down' | 'talk' | 'happy'
-type Legs = 'stand' | 'walk0' | 'walk1' | 'walk2' | 'walk3' | 'sit'
+/** tuck = 다리 대신 셔츠 아랫단(뒷모습으로 소파에 앉을 때, 등받이 위로 바지가 보이지 않게) */
+type Legs = 'stand' | 'walk0' | 'walk1' | 'walk2' | 'walk3' | 'sit' | 'tuck'
 
 interface Pose {
   /** 상체(머리·몸통·팔·소품) 세로 이동. 다리는 땅에 붙어 있고 바지가 늘어난다 */
@@ -150,6 +151,12 @@ function sideRaised(handY: number, handX = 1): Layer {
 // ---------------------------------------------------------------------------
 
 function legs(dir: DrawDir, kind: Legs, top: number): Layer {
+  if (kind === 'tuck')
+    return merge(
+      rect(5, top, 4, 23 - top, 'c'),
+      rect(9, top, 1, 23 - top, 'C'),
+      rect(10, top, 1, 23 - top, 'c'),
+    )
   if (kind === 'sit') {
     if (dir === 'down')
       return merge(
@@ -215,7 +222,137 @@ export interface ActionDef {
   name: string
   /** 권장 프레임 간격(ms). 아틀라스 meta.frameMs 에도 들어간다 */
   frameMs: number
+  /** true 면 방향 무관 행동: 키는 `_down` 하나만 만든다(pixel-art-pipeline 4절) */
+  downOnly?: boolean
   frames: (dir: DrawDir) => Pose[]
+  /** 지정하면 frames 대신 이 함수로 기호 프레임을 만든다(프레임 크기 자유, 앵커는 언제나 0.5, 1) */
+  render?: (dir: DrawDir) => KeyFrame[]
+}
+
+// ---------------------------------------------------------------------------
+// 소파 위 자세 (furn_sofa, rooms.ts sofa()). 소파는 아래 벽에 붙어 방 쪽(위)을 향하므로 화면에서는
+// 등받이가 앞에 보이고, 앉거나 누운 사람은 등받이 너머(좌석 위)에 있다.
+// 그래서 프레임 맨 아래 3줄에 등받이 윗면(sky 1줄 + blue 2줄)을 함께 그려, 소파 위에 그리면
+// 사람의 아랫부분이 등받이에 가려진 것처럼 보이게 한다. 이 3줄은 소파 앵커 기준 x −19..18 에서
+// 색이 균일하므로 그 구간 안이면 어느 x 에 놓아도 이음매가 없다.
+// ---------------------------------------------------------------------------
+
+export const SOFA_SEAT = {
+  /** 프레임 아래 끝(앵커 y) = 소파 앵커 y − 8 */
+  feetDy: -8,
+  /** 등받이 윗면 색이 균일한 x 구간(소파 앵커 기준, 양끝 포함) */
+  backX: [-19, 18] as const,
+  /** sofa_sit 권장 자리(앵커 x 오프셋): 왼쪽·오른쪽 쿠션 가운데 */
+  sitDx: [-9, 9] as const,
+  /** sofa_lie 앵커 x 오프셋(머리가 왼쪽 팔걸이에 닿음) */
+  lieDx: -3,
+  lieW: 32,
+  lieH: 16,
+}
+
+/** 프레임 맨 아래 3줄 = 등받이 윗면(외곽선 없음) */
+function backrestStrip(w: number, h: number): Layer {
+  return merge(rect(0, h - 3, w, 1, 'y', false), rect(0, h - 2, w, 2, 'u', false))
+}
+
+/** 상체가 3px 내려앉는다(어깨 y16, 등받이 윗면 y21) */
+const SOFA_SIT_DY = 3
+
+/** 뒷모습: 두 팔을 등받이 위에 걸치고 기댐. 프레임 고정 좌표(등받이 줄 위에 그린다) */
+const SOFA_ARMS: Layer[] = [
+  merge(
+    rect(4, 16, 1, 1, 'c'),
+    rect(3, 16, 1, 5, 'c'),
+    rect(2, 21, 1, 1, 'c'),
+    rect(1, 21, 1, 1, 's'),
+  ),
+  merge(
+    rect(11, 16, 1, 1, 'C'),
+    rect(12, 16, 1, 5, 'C'),
+    rect(13, 21, 1, 1, 'C'),
+    rect(14, 21, 1, 1, 's'),
+  ),
+]
+
+function renderSofaSit(): KeyFrame[] {
+  // 숨쉬기: 머리만 1px 내려간다(팔은 등받이에 걸쳐 고정)
+  return [0, 1].map((hy, i) =>
+    compose(
+      poseLayers('up', {
+        legs: 'tuck',
+        dy: SOFA_SIT_DY,
+        hy,
+        arms: [],
+        frontFixed: [backrestStrip(FRAME_W, FRAME_H), ...SOFA_ARMS],
+      }),
+      FRAME_W,
+      FRAME_H,
+      `sofa_sit_${i}`,
+    ),
+  )
+}
+
+/** 누운 다리를 늘리는 칸 수(눕힌 프레임에서 허벅지 열을 복제) */
+const LIE_LEG_EXTRA = 4
+
+/** 정면 기호 프레임(16×24)을 반시계로 90° 돌린다: 머리(위)가 왼쪽, 몸의 화면 오른쪽이 위로 */
+function rotateCcw(kf: KeyFrame): KeyFrame {
+  const h = kf.length
+  const w = kf[0]?.length ?? 0
+  return Array.from({ length: w }, (_, r) =>
+    Array.from({ length: h }, (_, c) => kf[c]?.[w - 1 - r] ?? null),
+  )
+}
+
+function renderSofaLie(): KeyFrame[] {
+  const { lieW, lieH } = SOFA_SEAT
+  return [0, 1].map((lift, i) => {
+    // 정면 자세(눈 감음, 두 손은 배 위)로 그린 뒤 눕힌다. lift = 숨 들이쉼(상체가 화면 위로 1px)
+    const [legLayer, ...upper] = poseLayers('down', {
+      expr: 'closed',
+      arms: [
+        merge(rect(4, 13, 1, 2, 'c'), rect(5, 15, 2, 1, 's')),
+        merge(rect(11, 13, 1, 2, 'C'), rect(9, 15, 2, 1, 's')),
+      ],
+    })
+    const standing = compose(
+      [legLayer as Layer, ...upper.map((l) => shift(l, lift, 0))],
+      FRAME_W,
+      FRAME_H,
+      `sofa_lie_${i}`,
+    )
+    // 눕히면 열 = 원래 y. 허벅지(y17, 바지만 있는 줄)를 LIE_LEG_EXTRA 번 더 넣어 다리를 늘린다
+    const body = rotateCcw(standing).map((row) => [
+      ...row.slice(0, 17),
+      ...Array<Key | null>(LIE_LEG_EXTRA)
+        .fill(null)
+        .map(() => row[17] ?? null),
+      ...row.slice(17),
+    ])
+    const out: KeyFrame = Array.from({ length: lieH }, (_, y) =>
+      Array.from({ length: lieW }, (_, x) => body[y]?.[x] ?? null),
+    )
+    const strip = compose([backrestStrip(lieW, lieH)], lieW, lieH, `sofa_lie_${i}_back`)
+    strip.forEach((row, y) => {
+      row.forEach((k, x) => {
+        if (k !== null) (out[y] as (Key | null)[])[x] = k
+      })
+    })
+    return out
+  })
+}
+
+/** 행동 하나의 기호 프레임(그 방향, 그리는 방향 기준 — right 는 build 에서 left 반전) */
+export function actionFrames(action: ActionDef, dir: DrawDir): KeyFrame[] {
+  if (action.render) return action.render(dir)
+  return action
+    .frames(dir)
+    .map((p, i) => compose(poseLayers(dir, p), FRAME_W, FRAME_H, `${action.name}_${dir}_${i}`))
+}
+
+/** 아틀라스에 만들 방향 */
+export function actionDirs(action: ActionDef): readonly Dir[] {
+  return action.downOnly ? ['down'] : ALL_DIRS
 }
 
 /** 앉으면 상체가 2px 내려간다 */
@@ -416,11 +553,7 @@ export const ACTIONS: readonly ActionDef[] = [
         // 옆모습: 귀(x8) 앞에 수화기, 먼 팔은 책상 위로 뻗음(type_left 와 같은 손 위치).
         // 두 팔이 어깨(x10)를 공유하므로 한 레이어로 합쳐 사이에 외곽선이 생기지 않게 한다
         const ear = (d: number) => [
-          merge(
-            sideReach(15, 3),
-            rect(10, 11 + d, 1, 3 - d, 'C'),
-            rect(9, 10 + d, 2, 1, 's'),
-          ),
+          merge(sideReach(15, 3), rect(10, 11 + d, 1, 3 - d, 'C'), rect(9, 10 + d, 2, 1, 's')),
         ]
         return [
           { ...sit, expr: 'talk', arms: ear(0), front: [PHONE(8, 6)] },
@@ -621,6 +754,22 @@ export const ACTIONS: readonly ActionDef[] = [
       })
       return [hold(0), hold(1)]
     },
+  },
+  {
+    // 소파에 앉아 쉬기(한 턴 끝): 등받이 너머 뒷모습, 손깍지를 뒤통수에 대고 기댐. 16×24, 숨쉬기 1px
+    name: 'sofa_sit',
+    frameMs: 600,
+    downOnly: true,
+    frames: () => [],
+    render: renderSofaSit,
+  },
+  {
+    // 소파에 누워 쉬기(한 턴 끝): 머리는 왼쪽 팔걸이, 눈 감고 손은 배 위. 32×16, 숨쉬기 1px
+    name: 'sofa_lie',
+    frameMs: 700,
+    downOnly: true,
+    frames: () => [],
+    render: renderSofaLie,
   },
 ]
 

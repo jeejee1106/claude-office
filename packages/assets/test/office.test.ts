@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import {
+  COLS,
+  DOOR_OUTSIDE,
+  DOORWAYS,
+  isWall,
+  ROOMS,
+  ROWS,
+} from '../../../apps/web/src/scene/layout'
 import { decodePng, encodePng, type PixelImage } from '../src/canvas'
+import { floorTileMap } from '../src/floorplan'
 import { packOffice } from '../src/officeSheet'
 import { buildCharacterSheet } from '../src/sheet'
-import { buildOfficeFrames, SIGN, signMidsFor, signWidth } from '../src/sprites/office'
+import {
+  buildOfficeFrames,
+  OFFICE_ANIMATIONS,
+  SIGN,
+  signMidsFor,
+  signWidth,
+} from '../src/sprites/office'
 import { offPalettePixels } from '../src/validate'
 
 const frames = buildOfficeFrames()
@@ -17,23 +32,23 @@ describe('office frames', () => {
   it('follow the naming rule, are multiples of 16 and use only palette colors', () => {
     expect(new Set(frames.map((f) => f.name)).size).toBe(frames.length)
     for (const f of frames) {
-      expect(f.name).toMatch(/^(tile_[a-z_]+_\d+|furn_[a-z_]+|ui_[a-z_]+)$/)
+      expect(f.name).toMatch(/^(tile_[a-z_]+_\d+|furn_[a-z_]+(_\d+)?|ui_[a-z_]+)$/)
       expect(f.image.width % 16, f.name).toBe(0)
       expect(f.image.height % 16, f.name).toBe(0)
       expect(offPalettePixels(f.image), f.name).toEqual([])
     }
   })
 
-  it('floor and back-wall tiles are fully opaque (no seams)', () => {
-    for (const f of frames.filter((f) => /^tile_(floor|wall)/.test(f.name)))
+  it('floor, wall and doorway tiles are fully opaque (no seams)', () => {
+    for (const f of frames.filter((f) => /^tile_(floor|wall|doorway)/.test(f.name)))
       for (const c of f.image.data) expect(c, f.name).not.toBe(0)
   })
 
   it('furniture touches the bottom row (anchor = floor contact)', () => {
-    for (const f of frames.filter(
-      (f) => f.name.startsWith('furn_') && f.name !== 'furn_teamsign_mid',
-    )) {
+    for (const f of frames.filter((f) => f.name.startsWith('furn_'))) {
       expect(f.anchor.y, f.name).toBe(1)
+      // 간판 가운데 조각·바닥 장식(케이블)은 바닥 줄이 비어 있을 수 있다
+      if (f.name === 'furn_teamsign_mid' || f.name === 'furn_cables') continue
       const bottom = f.image.height - 1
       expect(
         Array.from({ length: f.image.width }, (_, x) => f.image.get(x, bottom)).some((c) => c),
@@ -72,6 +87,52 @@ describe('office frames', () => {
       expect(w - 2 * (SIGN.panelInsetX + SIGN.textPadX)).toBeGreaterThanOrEqual(tw)
     }
     expect(signMidsFor(1)).toBe(1)
+  })
+})
+
+describe('room frames', () => {
+  it('every animation frame exists and frames of one animation share a size', () => {
+    for (const [key, names] of Object.entries(OFFICE_ANIMATIONS)) {
+      expect(key).toMatch(/^furn_[a-z_]+$/)
+      expect(names.length, key).toBeGreaterThanOrEqual(2)
+      const sizes = new Set(
+        names.map((n) => {
+          const i = img(n)
+          expect(i, `${key} -> ${n}`).toBeDefined()
+          return `${i.width}x${i.height}`
+        }),
+      )
+      expect(sizes.size, key).toBe(1)
+      // 프레임끼리 실제로 달라야 깜빡임·움직임이 보인다
+      for (let k = 1; k < names.length; k++)
+        expect(img(names[k] as string).equals(img(names[k - 1] as string)), key).toBe(false)
+    }
+  })
+
+  it('room-boundary tiles reuse the neighbouring floor at their edges', () => {
+    // 세로 칸막이 왼쪽 열(x0) = 왼쪽 바닥 x0 열, 오른쪽 끝 열(x15) = 오른쪽 바닥 x15 열
+    expect(column(img('tile_wall_v_wood_work_0'), 0)).toEqual(column(img('tile_floor_wood_0'), 0))
+    expect(column(img('tile_wall_v_wood_work_0'), 15)).toEqual(column(img('tile_floor_0'), 15))
+    expect(column(img('tile_doorway_work_metal_0'), 15)).toEqual(
+      column(img('tile_floor_metal_0'), 15),
+    )
+    expect(column(img('tile_wall_v_tile_out_0'), 0)).toEqual(column(img('tile_floor_tile_0'), 0))
+  })
+
+  it('the whole floor plan from layout.ts maps to existing frames', () => {
+    const map = floorTileMap({
+      cols: COLS,
+      rows: ROWS,
+      rooms: ROOMS,
+      isWall,
+      doorways: DOORWAYS,
+      doorOutside: DOOR_OUTSIDE,
+    })
+    expect(map.length).toBe(ROWS)
+    for (const line of map) {
+      expect(line.length).toBe(COLS)
+      for (const n of line) expect(byName.has(n), n).toBe(true)
+    }
   })
 })
 

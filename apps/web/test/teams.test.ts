@@ -16,10 +16,10 @@ import {
   missingOfficeFrames,
   OFFICE_FRAME_NAMES,
   OFFSET,
+  officeTiles,
   parseSignMeta,
   placementOf,
   signTextBox,
-  workAreaTiles,
 } from '../src/scene/render/officeSheet'
 import { DEFAULT_TEAM_CONFIG, TEAM_IDS, teamOf } from '../src/scene/teams'
 
@@ -145,19 +145,19 @@ describe('office 시트 배치 (pixel-artist 요약의 오프셋)', () => {
   })
 
   it('업무 공간 타일: 업무 공간 안은 모두 바닥, 출입구는 칸막이로 막지 않는다', () => {
-    const tiles = workAreaTiles()
+    const tiles = officeTiles()
     const at = (c: number, r: number) => tiles.filter((t) => t.col === c && t.row === r)
     for (let r = 2; r <= 12; r++)
       for (let c = 7; c <= 16; c++)
-        expect(at(c, r).map((t) => t.frame.startsWith('tile_floor'))).toEqual([true])
+        expect(at(c, r).map((t) => /^tile_floor_\d$/.test(t.frame))).toEqual([true])
     for (const [c, r] of [
       [6, 4],
       [6, 10],
       [17, 4],
       [17, 10],
     ] as const)
-      expect(at(c, r).some((t) => t.frame.startsWith('tile_partition'))).toBe(false)
-    expect(at(6, 3).at(-1)?.frame).toBe('tile_partition_v_end_0')
+      expect(at(c, r).map((t) => t.frame.startsWith('tile_doorway_'))).toEqual([true])
+    expect(at(6, 3).at(-1)?.frame).toBe('tile_wall_v_end_wood_work_0')
     expect(new Set(tiles.map((t) => t.frame)).size).toBeGreaterThan(5)
     for (const t of tiles) expect(json.frames[t.frame], t.frame).toBeDefined()
   })

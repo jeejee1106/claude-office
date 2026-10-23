@@ -4,9 +4,9 @@ import { decodePng, PixelImage } from './canvas'
 import type { OfficeAtlas } from './officeSheet'
 import { VARIANT_COUNT } from './palette'
 import { OUTPUT_DIR, REPO_ROOT } from './paths'
-import type { PixiAtlas } from './sheet'
+import { DOWN_ONLY_ACTIONS, type PixiAtlas } from './sheet'
 import { ALL_DIRS } from './sprites/character'
-import { buildOfficeFrames } from './sprites/office'
+import { buildOfficeFrames, OFFICE_ANIMATIONS } from './sprites/office'
 import { offPalettePixels } from './validate'
 
 /*
@@ -63,10 +63,19 @@ for (const a of docAnims)
 for (const a of sceneAnims)
   if (!docAnims.includes(a)) errors.push(`scene uses '${a}' but doc list does not`)
 
+// 방향 무관 행동(sofa_sit, sofa_lie)은 _down 키 하나만 있다(meta.downOnly). 다른 방향 키가 있으면 오류
+const downOnly = new Set(atlas.meta.downOnly ?? [])
+for (const a of DOWN_ONLY_ACTIONS)
+  if (!downOnly.has(a)) errors.push(`meta.downOnly lacks '${a}' (run build)`)
+for (const key of Object.keys(atlas.animations)) {
+  const m = /^char_\d+_([a-z_]+)_(up|left|right)$/.exec(key)
+  if (m && downOnly.has(m[1] as string)) errors.push(`${key}: '${m[1]}' is down-only`)
+}
+
 let checked = 0
 for (let v = 0; v < sceneVariants; v++) {
   for (const anim of required) {
-    for (const dir of ALL_DIRS) {
+    for (const dir of downOnly.has(anim) ? (['down'] as const) : ALL_DIRS) {
       const key = `char_${v}_${anim}_${dir}`
       const names = atlas.animations[key]
       if (!names || names.length === 0) {
@@ -121,6 +130,15 @@ for (const f of expected) {
 }
 for (const n of Object.keys(officeAtlas.frames))
   if (!expected.some((f) => f.name === n)) errors.push(`office: stale frame ${n} (run build)`)
+// 가구 애니메이션(furn_{name} → 프레임 배열): 스크립트와 같고, 프레임이 시트에 있어야 한다
+for (const [key, names] of Object.entries(OFFICE_ANIMATIONS)) {
+  const disk = officeAtlas.animations[key]
+  if (!disk || disk.join() !== names.join())
+    errors.push(`office: animation ${key} differs from the script (run build)`)
+  for (const n of names) if (!officeAtlas.frames[n]) errors.push(`office: ${key} -> missing ${n}`)
+}
+for (const key of Object.keys(officeAtlas.animations))
+  if (!(key in OFFICE_ANIMATIONS)) errors.push(`office: stale animation ${key} (run build)`)
 
 // 씬 코드가 이름으로 부르는 furn_/tile_/ui_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
 const warnings: string[] = []
@@ -145,6 +163,7 @@ if (errors.length) {
 }
 console.log(
   `verify OK: ${required.length} animations (${required.join(', ')}) x ${ALL_DIRS.length} dirs x ` +
-    `${sceneVariants} variants, ${checked} frames checked; office ${expected.length} frames match the script; ` +
+    `${sceneVariants} variants, ${checked} frames checked; office ${expected.length} frames + ` +
+    `${Object.keys(OFFICE_ANIMATIONS).length} animations match the script; ` +
     '0 off-palette pixels',
 )

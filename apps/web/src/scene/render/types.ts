@@ -41,6 +41,8 @@ export interface SceneRenderer {
   setLights(on: boolean): void
   /** 서버실 LED: busy 면 빠르게 깜빡임(명령 실행 중) */
   setServerBusy(busy: boolean): void
+  /** 회의실 화이트보드 글씨 남김(세션에서 계획을 한 번이라도 함). 쓰는 중의 글씨는 렌더러가 따로 켠다 */
+  setBoardWritten(written: boolean): void
   /** 매 프레임 호출(조명 전환 등 전역 애니메이션) */
   tick(dtMs: number): void
   /** 정수 배율이 바뀌었을 때(오버레이 DOM 위치 계산용) */

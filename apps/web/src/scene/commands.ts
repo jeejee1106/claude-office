@@ -70,13 +70,22 @@ export type CharacterCommandType = CharacterCommand['type']
  * 씬 전역 명령.
  * - lights: 사무실 조명. off 는 Roster 가 "마지막 사람이 나갈 때"까지 미룬다.
  * - servers: 서버실 LED. busy = 지금 명령(bash)을 실행 중인 에이전트가 있음 → 빠르게 깜빡임
+ * - board: 회의실 화이트보드 글씨 남김. written = 보고 있는 세션에서 계획(plan 도구)을 한 번이라도 했음
+ *   (세션이 끝나면 false). 쓰는 중의 글씨는 렌더러가 캐릭터 동작으로 따로 켠다.
  */
 export type SceneCommand =
   | { type: 'lights'; on: boolean; cause: string }
   | { type: 'servers'; busy: boolean; cause: string }
+  | { type: 'board'; written: boolean; cause: string }
 
 export type DirectorOutput = CharacterCommand | SceneCommand
 
+const SCENE_TYPES: ReadonlySet<string> = new Set<SceneCommand['type']>([
+  'lights',
+  'servers',
+  'board',
+])
+
 export function isCharacterCommand(c: DirectorOutput): c is CharacterCommand {
-  return c.type !== 'lights' && c.type !== 'servers'
+  return !SCENE_TYPES.has(c.type)
 }

@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { decodePng, encodePng, type PixelImage } from '../src/canvas'
 import { MAX_PALETTE_SIZE, PALETTE, VARIANTS } from '../src/palette'
 import { buildCharacterSheet, keyFrames, packSheet } from '../src/sheet'
-import { ACTIONS, ALL_DIRS, FRAME_H, FRAME_W } from '../src/sprites/character'
+import {
+  ACTIONS,
+  ALL_DIRS,
+  actionDirs,
+  FRAME_H,
+  FRAME_W,
+  SOFA_SEAT,
+} from '../src/sprites/character'
+import { buildOfficeFrames } from '../src/sprites/office'
 import { offPalettePixels } from '../src/validate'
 
 const sheet = buildCharacterSheet()
@@ -22,10 +30,16 @@ describe('palette', () => {
 })
 
 describe('character sheet', () => {
-  it('creates every action x 4 dirs x 8 variants with sequential frame names', () => {
+  it('creates every action x 4 dirs (down only for down-only actions) x 8 variants with sequential frame names', () => {
     for (const v of VARIANTS)
-      for (const a of ACTIONS)
-        for (const d of ALL_DIRS) {
+      for (const a of ACTIONS) {
+        for (const d of ALL_DIRS)
+          if (!actionDirs(a).includes(d))
+            expect(
+              sheet.animations[`char_${v.id}_${a.name}_${d}`],
+              `${a.name}_${d}`,
+            ).toBeUndefined()
+        for (const d of actionDirs(a)) {
           const key = `char_${v.id}_${a.name}_${d}`
           const names = sheet.animations[key]
           expect(names, key).toBeDefined()
@@ -34,6 +48,7 @@ describe('character sheet', () => {
             expect(n).toBe(`${key}_${i}`)
           })
         }
+      }
   })
 
   it('right is the horizontal mirror of left', () => {
@@ -46,7 +61,8 @@ describe('character sheet', () => {
   it('every frame stands on the bottom row (feet anchor) and has no off-palette pixels', () => {
     for (const f of sheet.frames) {
       let bottom = false
-      for (let x = 0; x < FRAME_W; x++) if (f.image.get(x, FRAME_H - 1) !== 0) bottom = true
+      for (let x = 0; x < f.image.width; x++)
+        if (f.image.get(x, f.image.height - 1) !== 0) bottom = true
       expect(bottom, f.name).toBe(true)
       expect(offPalettePixels(f.image), f.name).toEqual([])
     }
@@ -63,6 +79,61 @@ describe('character sheet', () => {
     // 머리 외곽선 아래(턱 밑) 행 = 12, 전체 24
     expect(kf?.[12]?.some((k) => k === 'o')).toBe(true)
     expect(kf?.[0]?.some((k) => k === 'o')).toBe(true)
+  })
+})
+
+describe('sofa poses', () => {
+  const sofa = buildOfficeFrames().find((f) => f.name === 'furn_sofa')
+  if (!sofa) throw new Error('furn_sofa missing')
+  /** 소파 앵커 기준 (x, y) 의 소파 픽셀 */
+  const sofaAt = (x: number, y: number) =>
+    sofa.image.get(
+      x + Math.round(sofa.anchor.x * sofa.image.width),
+      y + Math.round(sofa.anchor.y * sofa.image.height),
+    )
+
+  it('has the documented sizes and two breathing frames, down only', () => {
+    for (const v of VARIANTS) {
+      const sit = sheet.animations[`char_${v.id}_sofa_sit_down`] ?? []
+      const lie = sheet.animations[`char_${v.id}_sofa_lie_down`] ?? []
+      expect(sit).toHaveLength(2)
+      expect(lie).toHaveLength(2)
+      for (const n of sit)
+        expect([byName.get(n)?.width, byName.get(n)?.height]).toEqual([FRAME_W, FRAME_H])
+      for (const n of lie)
+        expect([byName.get(n)?.width, byName.get(n)?.height]).toEqual([
+          SOFA_SEAT.lieW,
+          SOFA_SEAT.lieH,
+        ])
+      expect(byName.get(sit[0] as string)?.equals(byName.get(sit[1] as string) as PixelImage)).toBe(
+        false,
+      )
+      expect(byName.get(lie[0] as string)?.equals(byName.get(lie[1] as string) as PixelImage)).toBe(
+        false,
+      )
+    }
+  })
+
+  it('backrest strip at the frame bottom matches the sofa underneath (seamless at the documented offsets)', () => {
+    const place = (name: string, dx: number) => {
+      const img = byName.get(name) as PixelImage
+      const left = dx - img.width / 2
+      const top = SOFA_SEAT.feetDy - img.height
+      // 프레임 맨 아래 3줄 중 팔이 없는 칸은 소파 픽셀과 같아야 한다
+      let same = 0
+      for (let j = img.height - 3; j < img.height; j++)
+        for (let i = 0; i < img.width; i++) {
+          const x = left + i
+          expect(x).toBeGreaterThanOrEqual(SOFA_SEAT.backX[0])
+          expect(x).toBeLessThanOrEqual(SOFA_SEAT.backX[1])
+          if (img.get(i, j) === sofaAt(x, top + j)) same++
+        }
+      return same / (img.width * 3)
+    }
+    for (const dx of SOFA_SEAT.sitDx)
+      expect(place('char_3_sofa_sit_down_0', dx)).toBeGreaterThan(0.6)
+    // 누운 자세는 팔이 없으므로 등받이 줄 전체가 소파와 같다
+    expect(place('char_3_sofa_lie_down_0', SOFA_SEAT.lieDx)).toBe(1)
   })
 })
 

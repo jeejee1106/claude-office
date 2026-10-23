@@ -72,6 +72,9 @@ export const FIXED_SPOTS = [
   'whiteboard',
   'phone',
   'coffee',
+  /** 휴게실 소파에 앉기·눕기(한 턴 끝 쉬기). 소파는 한 사람만 — 둘 중 하나라도 차 있으면 커피 */
+  'sofaSit',
+  'sofaLie',
   'shredder',
 ] as const
 export type SpotId = (typeof FIXED_SPOTS)[number]
@@ -217,6 +220,35 @@ const spot = (
 const desk = (id: SpotId, col: number, row: number): Spot =>
   spot(id, col, row, 'up', true, BETWEEN_TILES_SLOT)
 
+/**
+ * 소파 위 캐릭터 앵커 = 소파 앵커 (72, 208) + 이 오프셋 (pixel-artist 요약 "2026-10-23 sofa" 배치 표).
+ * 프레임 맨 아래 3줄에 등받이 윗면이 그려져 있어 이 자리에 정확히 놓아야 소파 그림과 이어진다.
+ * 소파는 방 쪽(위)을 향한다 → 앉은 사람은 뒷모습.
+ */
+export const SOFA_SEAT = {
+  sitLeft: [-9, -8],
+  sitRight: [9, -8],
+  lie: [-3, -8],
+} as const satisfies Record<string, readonly [number, number]>
+
+/**
+ * 소파 prop (3,12,3×1) 앵커(바닥 접점) — officeSheet.propAnchor 와 같은 규칙. PROPS 보다 먼저 쓰이므로
+ * 숫자로 두고 test/lounge.test.ts 가 PROPS 의 소파와 같은지 확인한다.
+ */
+export const SOFA_ANCHOR = { x: 3 * TILE + 3 * (TILE / 2), y: (12 + 1) * TILE } as const
+/**
+ * 소파 위 캐릭터의 깊이 정렬 y = 소파 앵커 y + 1 (209). 발끝(200)으로 정렬하면 좌석 쿠션이 사람을 덮는다.
+ * 소파 앞(아래)은 바깥 벽이라 이 깊이로 그려도 다른 캐릭터와 겹칠 일이 없다.
+ */
+export const SOFA_SORT_Y = SOFA_ANCHOR.y + 1
+
+/** 스팟 타일 발끝 기준 슬롯 = 소파 앵커 + 오프셋 − 타일 발끝 */
+const sofaSlot = (col: number, row: number, off: readonly [number, number]) =>
+  [
+    SOFA_ANCHOR.x + off[0] - (col * TILE + TILE / 2),
+    SOFA_ANCHOR.y + off[1] - (row * TILE + TILE - 2),
+  ] as const
+
 export const SPOTS: Readonly<Record<SpotId, Spot>> = {
   // 출입문 / 로비
   door: spot('door', 11, 12, 'down'),
@@ -250,6 +282,13 @@ export const SPOTS: Readonly<Record<SpotId, Spot>> = {
   ]),
   // 휴게실
   coffee: spot('coffee', 2, 9, 'left'),
+  // 소파(3..5열, 12행, 막힘) 바로 앞 칸까지 걸어가서 슬롯 오프셋으로 소파 위에 앉는다/눕는다.
+  // 소파는 방 쪽(위)을 향함 → face up(뒷모습). 앉기는 왼쪽·오른쪽 2자리, 눕기는 1자리(SOFA_SEAT)
+  sofaSit: spot('sofaSit', 3, 11, 'up', true, [
+    sofaSlot(3, 11, SOFA_SEAT.sitLeft),
+    sofaSlot(3, 11, SOFA_SEAT.sitRight),
+  ]),
+  sofaLie: spot('sofaLie', 4, 11, 'up', true, [sofaSlot(4, 11, SOFA_SEAT.lie)]),
 }
 
 // ---------------------------------------------------------------------------

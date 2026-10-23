@@ -8,6 +8,8 @@
     "build": "tsx src/build.ts",
     "preview": "tsx src/preview.ts",
     "sample": "tsx src/sample.ts",
+    "sample:rooms": "tsx src/sampleRooms.ts",
+    "sample:lounge": "tsx src/sampleLounge.ts",
     "verify": "tsx src/verify.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
