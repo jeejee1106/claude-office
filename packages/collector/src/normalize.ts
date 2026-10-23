@@ -22,7 +22,7 @@ import { baseName, toolTarget, truncate } from './target'
  *   SubagentStart       → agent.spawn    (agentId = agent_id, agentType = agent_type)
  *   SubagentStop        → agent.finish   (agentId = agent_id)
  *   Stop                → turn.end
- *   Notification        → attention      (permission_prompt/idle_prompt/입력 요청만)
+ *   Notification        → attention      (permission_prompt/입력 요청만. idle_prompt 는 보내지 않음)
  *   PermissionRequest   → null. auto mode 분류기가 묻지 않고 허용할 때도 오므로(2026-10-23 캡처)
  *                         확인 창의 근거로 쓰지 않는다. hook.ts 가 요청한 에이전트만 기억한다.
  *   PreCompact          → context.compact (trigger)
@@ -61,9 +61,12 @@ function stableId(parts: string[], ctx: NormalizeContext): string {
   return id.length <= ID_MAX ? id : ctx.newId()
 }
 
+/**
+ * idle_prompt("다음 입력을 기다림")는 보내지 않는다: 턴이 끝난 뒤 오는 알림이라 turn.end 와 같은 뜻이고,
+ * attention 으로 보내면 휴게실에서 쉬는 팀장 머리 위에 "?"가 뜬다(2026-10-23 사용자 관찰).
+ */
 const NOTIFICATION_REASON: Readonly<Record<string, 'permission' | 'idle' | 'other'>> = {
   permission_prompt: 'permission',
-  idle_prompt: 'idle',
   elicitation_dialog: 'other',
   elicitation_url_dialog: 'other',
   agent_needs_input: 'other',

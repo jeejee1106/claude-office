@@ -43,6 +43,7 @@ export type CharacterCommand =
   /**
    * 제자리에서 anim. durationMs 가 있으면 그 시간 동안 머문 뒤 다음 명령.
    * interruptible: 뒤에 soft 가 아닌 명령이 오면 MIN_DWELL_MS 뒤 바로 끝낸다(대사 < 도구).
+   * bubble: 행동 중 띄울 도구 말풍선(brief 도구 — 전화 걸기). 없으면 도구 말풍선을 끈다.
    */
   | (Base & {
       type: 'act'
@@ -50,6 +51,7 @@ export type CharacterCommand =
       durationMs: number | null
       say?: string | null
       interruptible?: boolean
+      bubble?: string | null
     })
   /** 머리 위 표시(큐를 거치지 않고 즉시). durationMs 없으면 다음 mark 까지 유지 */
   | (Base & { type: 'mark'; mark: Mark | null; durationMs: number | null })

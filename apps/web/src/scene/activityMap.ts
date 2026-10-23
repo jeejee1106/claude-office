@@ -26,6 +26,8 @@ export const ANIMATIONS = [
   'wave',
   'write_board',
   'phone',
+  /** 자기 자리에 앉은 채 전화(서브에이전트 호출). 아틀라스에 없으면 phone 프레임을 앉은 높이로 내려 그린다(characterSheet ANIM_FALLBACK) */
+  'phone_sit',
   'idle_drink',
   'raise_hand',
   'shred',
@@ -62,7 +64,16 @@ export interface ToolActivity {
   effect?: Effect
   /** 말풍선 문자열. null 이면 말풍선 없음 */
   bubble: (tool: Pick<ToolInfo, 'name' | 'target'>) => string | null
+  /**
+   * 잠깐만 하는 행동: 도착 후 BRIEF_TOOL_MS 동안 anim(말풍선 유지) → 자기 책상 idle_sit(soft).
+   * tool.end 를 기다리지 않는다(Agent 도구는 서브가 끝날 때까지 tool.end 가 오지 않으므로).
+   * 다시 배치(syncAll)할 때도 진행 중인 도구로 보지 않고 자기 책상 idle_sit 로 둔다.
+   */
+  brief?: boolean
 }
+
+/** brief 도구 행동(전화 걸기) 시간. 말풍선(대사 자리)도 이만큼 뜬다 */
+export const BRIEF_TOOL_MS = SPEECH_MS
 
 const withTarget = (icon: string) => (t: Pick<ToolInfo, 'target'>) =>
   t.target ? `${icon} ${t.target}` : icon
@@ -85,7 +96,8 @@ export const TOOL_ACTIVITY: Readonly<Record<ToolCategory, ToolActivity>> = {
     },
   },
   web: { spot: 'globe', anim: 'look', bubble: () => '🌐' },
-  agent: { spot: 'door', anim: 'wave', bubble: withTarget('👋') },
+  // 자기 자리(팀장: mainDesk, 서브: 자기 팀 책상)에 앉은 채 전화로 팀원을 부르고, 끊으면 하던 자리 동작으로
+  agent: { spot: 'ownDesk', anim: 'phone_sit', brief: true, bubble: withTarget('📞') },
   plan: { spot: 'whiteboard', anim: 'write_board', bubble: () => '📋' },
   mcp: {
     spot: 'phone',

@@ -405,6 +405,42 @@ export const ACTIONS: readonly ActionDef[] = [
     },
   },
   {
+    // 앉아서 전화(팀장이 자기 책상에서 팀원 호출): idle_sit 과 다리·몸통·머리 높이가 같다(legs sit, dy SEAT_DY, hy 0).
+    // 한 손은 수화기를 귀에, 다른 손은 책상 위. 2프레임은 수화기(손)가 1px 내려가고 입 모양이 바뀐다.
+    // frameMs 는 phone 과 같다(씬이 phone 대체용으로 쓰던 값과 박자를 맞춤)
+    name: 'phone_sit',
+    frameMs: 300,
+    frames: (dir) => {
+      const sit = { legs: 'sit', dy: SEAT_DY } as const
+      if (dir === 'left') {
+        // 옆모습: 귀(x8) 앞에 수화기, 먼 팔은 책상 위로 뻗음(type_left 와 같은 손 위치).
+        // 두 팔이 어깨(x10)를 공유하므로 한 레이어로 합쳐 사이에 외곽선이 생기지 않게 한다
+        const ear = (d: number) => [
+          merge(
+            sideReach(15, 3),
+            rect(10, 11 + d, 1, 3 - d, 'C'),
+            rect(9, 10 + d, 2, 1, 's'),
+          ),
+        ]
+        return [
+          { ...sit, expr: 'talk', arms: ear(0), front: [PHONE(8, 6)] },
+          { ...sit, expr: 'open', arms: ear(1), front: [PHONE(8, 7)] },
+        ]
+      }
+      // 정면·뒷모습: 화면 오른쪽 팔을 머리 옆으로 들어 수화기, 왼쪽 팔은 책상 위
+      const ear = (d: number) =>
+        merge(rect(11, 13, 3, 1, 'C'), rect(14, 10 + d, 1, 3 - d, 'C'), rect(14, 9 + d, 1, 1, 's'))
+      const desk =
+        dir === 'down'
+          ? merge(rect(4, 13, 1, 2, 'c'), rect(5, 15, 2, 1, 's'))
+          : vArm(4, 13, 14, 'c', 'none')
+      return [
+        { ...sit, expr: 'talk', arms: [desk, ear(0)], front: [PHONE(14, 5)] },
+        { ...sit, expr: 'open', arms: [desk, ear(1)], front: [PHONE(14, 6)] },
+      ]
+    },
+  },
+  {
     // 커피: 컵을 들고 있다가 한 모금
     name: 'idle_drink',
     frameMs: 500,

@@ -25,10 +25,14 @@
 | `search` | 서류 캐비닛 | `search` (서랍 뒤지기) | 🔍 패턴 |
 | `bash` | 서버실 터미널 | `type` (서서 타이핑) + 서버 LED 빠르게 깜빡임 | `>_` 명령 첫 단어 |
 | `web` | 창가 지구본 | `look` | 🌐 |
-| `agent` | 문 앞 | `wave` (문 쪽으로 손짓, 새 직원 맞이) | 👋 agentType |
+| `agent` | 자기 책상 | `phone_sit` (앉은 채 전화기를 들고 팀원을 부름. brief: 1.5초 뒤 같은 자리 `idle_sit`, soft) | 📞 agentType (tool.end 까지 유지) |
 | `plan` | 화이트보드 | `write_board` | 📋 |
 | `mcp` | 전화기 | `phone` | ☎️ 서버명 |
 | `other` | 자기 책상 | `idle_sit` | — |
+
+`agent`(서브에이전트 호출): 팀장은 큰 책상(`mainDesk`, face `down`), 서브가 또 서브를 부르면(중첩) 자기 팀 책상(face `up`)에서 같은 동작. 다른 곳에 있었으면 자기 자리로 걸어가서 건다. 문 앞으로 가지 않는다 — 불린 팀원은 `agent.spawn` 으로 문에서 들어온다. Agent 도구는 서브가 끝나야 `tool.end` 가 오므로 전화는 `brief`(1.5초, `BRIEF_TOOL_MS`)만 들고, 뒤에 다른 도구가 오면 바로 끊긴다. 말풍선은 도구가 진행 중인 동안(`tool.end` 까지) 남는다. 다시 배치(`syncAll`)하면 진행 중이어도 자기 책상 `idle_sit` + 📞 말풍선.
+
+`phone_sit` 프레임이 아틀라스에 없으면 `phone` 프레임을 앉은 높이(`SIT_DROP_PX` = 2px)만큼 내려 그린다(`characterSheet.ts` `ANIM_FALLBACK`, 다리는 책상·의자에 가려짐). `char_{v}_phone_sit_{dir}` 이 생기면 그쪽을 쓴다.
 
 서버실 LED: 어떤 에이전트든 `bash` 도구를 실행 중이면(그 에이전트의 다음 이벤트 전까지) 씬 명령 `servers busy` → 0.1초 간격 깜빡임, 아니면 0.5초 간격.
 
@@ -64,4 +68,4 @@
 
 ## 필요한 애니메이션 목록 (pixel-artist 요청 기준)
 
-`walk`(4방향), `idle_sit`, `idle_stand`, `type`, `read`, `search`, `look`, `wave`, `write_board`, `phone`, `idle_drink`, `raise_hand`, `shred`, `sleep`, `flinch`, `head_hold`, `pack`, `report`
+`walk`(4방향), `idle_sit`, `idle_stand`, `type`, `read`, `search`, `look`, `wave`, `write_board`, `phone`, `phone_sit`(앉아서 전화 — 없으면 phone 프레임을 2px 내려 그림), `idle_drink`, `raise_hand`, `shred`, `sleep`, `flinch`, `head_hold`, `pack`, `report`

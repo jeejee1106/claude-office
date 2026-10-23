@@ -1,18 +1,5 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`normalize: 모든 fixture > Notification.idle_prompt.json 1`] = `
-{
-  "agentId": "main",
-  "id": "id-1",
-  "kind": "attention",
-  "project": "demo-app",
-  "reason": "idle",
-  "sessionId": "00000000-0000-4000-8000-000000000001",
-  "ts": "2026-10-22T00:00:00.000Z",
-  "v": 1,
-}
-`;
-
 exports[`normalize: 모든 fixture > Notification.permission_prompt.json 1`] = `
 {
   "agentId": "main",

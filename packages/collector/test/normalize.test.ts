@@ -9,6 +9,8 @@ const EXPECT_NULL = new Set([
   // auto mode 에서 묻지 않고 허용될 때도 온다(2026-10-23 캡처) → 확인 창 근거로 쓰지 않는다
   'PermissionRequest.json',
   'PermissionRequest.subagent.json',
+  // 턴이 끝난 뒤의 "입력 대기" → 휴게실에서 "?"를 띄우지 않는다(2026-10-23)
+  'Notification.idle_prompt.json',
 ])
 
 describe('normalize: 모든 fixture', () => {
@@ -200,10 +202,8 @@ describe('normalize: 매핑 세부', () => {
       kind: 'attention',
       reason: 'permission',
     })
-    expect(normalize(loadFixture('Notification.idle_prompt.json'), fixedContext())).toMatchObject({
-      kind: 'attention',
-      reason: 'idle',
-    })
+    // idle_prompt 는 턴이 끝난 뒤의 "입력 대기"라 "?"를 띄우지 않는다
+    expect(normalize(loadFixture('Notification.idle_prompt.json'), fixedContext())).toBeNull()
     const base = loadFixture('Notification.idle_prompt.json')
     expect(
       normalize({ ...base, notification_type: 'agent_needs_input' }, fixedContext()),
@@ -229,10 +229,10 @@ describe('normalize: 매핑 세부', () => {
       agentId: 'a4d1b0553338ecf74',
       reason: 'permission',
     })
-    // idle_prompt 는 요청자와 무관
+    // 요청자가 기록돼 있어도 다른 입력 요청(agent_needs_input)은 main
     expect(
       normalize(
-        loadFixture('Notification.idle_prompt.json'),
+        { ...n, notification_type: 'agent_needs_input' },
         fixedContext({ permissionRequester: 'a4d1b0553338ecf74' }),
       )?.agentId,
     ).toBe('main')
