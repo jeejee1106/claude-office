@@ -136,8 +136,13 @@ function applyToAgent(prev: AgentState | undefined, e: OfficeEvent): AgentState 
     }
     return a
   }
-  // finish 이후 시각의 이벤트(드묾)는 되살린다.
-  if (a.finishedAt !== undefined && e.kind !== 'agent.finish' && e.kind !== 'agent.idle') {
+  // finish 이후 시각의 이벤트(드묾)는 되살린다. 상태 정리용 이벤트(idle·attention.clear)는 제외.
+  if (
+    a.finishedAt !== undefined &&
+    e.kind !== 'agent.finish' &&
+    e.kind !== 'agent.idle' &&
+    e.kind !== 'attention.clear'
+  ) {
     const { finishedAt: _drop, ...rest } = a
     a = { ...rest, activity: 'idle' }
   }
@@ -193,6 +198,13 @@ function applyToAgent(prev: AgentState | undefined, e: OfficeEvent): AgentState 
       return { ...withoutAttention(withoutTool(a)), activity: 'idle' }
     case 'attention':
       return { ...a, activity: 'waiting', attention: e.reason }
+    case 'attention.clear': {
+      // 사용자가 답함: "?"를 내리고 하던 일(진행 중 도구 또는 서브에이전트 호출)로 돌아간다.
+      if (a.attention === undefined) return a
+      if (e.reason !== undefined && e.reason !== a.attention) return a
+      const cleared = withoutAttention(a)
+      return cleared.activity === 'waiting' ? { ...cleared, activity: 'working' } : cleared
+    }
     case 'agent.idle':
       return a.activity === 'working' ? { ...withoutTool(a), activity: 'idle' } : a
     case 'context.compact':
@@ -235,6 +247,8 @@ function reduceUnsafe(state: OfficeState, e: OfficeEvent): OfficeState {
 
   if (session.endedAt !== undefined) {
     if (time(e.ts) <= time(session.endedAt)) return state // 종료 후 늦게 도착한 이벤트
+    // 정리용 이벤트로는 세션을 다시 열지 않는다(session.end 가 이미 attention 을 지웠다).
+    if (e.kind === 'attention.clear') return state
     // 재개
     const { endedAt: _a, endReason: _b, ...rest } = session
     session = rest
@@ -262,8 +276,12 @@ function reduceUnsafe(state: OfficeState, e: OfficeEvent): OfficeState {
     return { ...state, sessions: trimEnded({ ...state.sessions, [session.id]: session }) }
   }
 
-  // agent.idle 은 존재하는 에이전트에만 적용한다(유령 에이전트 생성 방지).
-  if (e.kind === 'agent.idle' && session.agents[e.agentId] === undefined) return state
+  // agent.idle·attention.clear 는 존재하는 에이전트에만 적용한다(유령 에이전트 생성 방지).
+  if (
+    (e.kind === 'agent.idle' || e.kind === 'attention.clear') &&
+    session.agents[e.agentId] === undefined
+  )
+    return state
 
   const agents = { ...session.agents }
   // 서브에이전트 이벤트가 먼저 와도 메인 캐릭터가 화면에 있도록 main 을 보장한다.

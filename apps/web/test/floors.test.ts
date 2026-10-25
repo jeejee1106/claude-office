@@ -115,6 +115,22 @@ describe('floors (순수 함수)', () => {
     // waiting(idle 사유)도 다른 층이면 빨간 점
     expect(floorTabs(office, order, 'p:beta', {})[0]?.attention).toBe(true)
   })
+
+  it('탭: 확인에 답하면(attention.clear) 다른 층의 빨간 점이 꺼진다', () => {
+    const office = build([
+      start('a', 0, 'alpha'),
+      start('b', 1, 'beta'),
+      ev({ sessionId: 'b', kind: 'attention', reason: 'permission', ts: T(3) }),
+    ])
+    const order = updateFloorOrder([], office)
+    const beta = (o: OfficeState) => floorTabs(o, order, 'p:alpha', {})[1]
+    expect(beta(office)?.attention).toBe(true)
+    const cleared = reduce(
+      office,
+      ev({ sessionId: 'b', kind: 'attention.clear', reason: 'permission', ts: T(4) }),
+    )
+    expect(beta(cleared)).toMatchObject({ name: 'beta', attention: false })
+  })
 })
 
 describe('officeStore 층 선택', () => {

@@ -23,6 +23,8 @@ export function describeEvent(e: OfficeEvent, lang: Lang = getLang()): string {
       return s('evTurnEnd')
     case 'attention':
       return `${s('evAttention')} (${e.reason})`
+    case 'attention.clear':
+      return `${s('evAttentionClear')}${e.reason ? ` (${e.reason})` : ''}`
     case 'context.compact':
       return `${s('evCompact')}${e.trigger ? ` (${e.trigger})` : ''}`
     case 'agent.idle':

@@ -21,6 +21,7 @@ import { baseName, toolTarget, truncate } from './target'
  *   PostToolUseFailure  → tool.end error
  *   SubagentStart       → agent.spawn    (agentId = agent_id, agentType = agent_type)
  *   SubagentStop        → agent.finish   (agentId = agent_id)
+ *                         둘 다 agent_type 이 없거나 비면 null(유령 서브에이전트, 2026-10-23 캡처)
  *   Stop                → turn.end
  *   Notification        → attention      (permission_prompt/입력 요청만. idle_prompt 는 보내지 않음)
  *   PermissionRequest   → null. auto mode 분류기가 묻지 않고 허용할 때도 오므로(2026-10-23 캡처)
@@ -162,18 +163,20 @@ export function normalize(hookInput: unknown, ctx: NormalizeContext): OfficeEven
       break
     }
     case 'SubagentStart': {
-      if (!subagentId) return null
       const agentType = str(input.agent_type)
+      // agent_type 이 비면 유령(내부 에이전트, hook-notes 2026-10-23) → 보내지 않는다.
+      if (!subagentId || !agentType) return null
       candidate = {
         ...base,
         id: stableId([sessionId, 'agent.spawn', subagentId], ctx),
         kind: 'agent.spawn',
-        ...(agentType ? { agentType: truncate(agentType, 60) } : {}),
+        agentType: truncate(agentType, 60),
       }
       break
     }
     case 'SubagentStop': {
-      if (!subagentId) return null
+      // SubagentStart 없이 agent_type 빈 값으로만 오는 유령 SubagentStop(2026-10-23 캡처 20건)은 버린다.
+      if (!subagentId || !str(input.agent_type)) return null
       candidate = {
         ...base,
         id: stableId([sessionId, 'agent.finish', subagentId], ctx),
@@ -216,5 +219,35 @@ export function normalize(hookInput: unknown, ctx: NormalizeContext): OfficeEven
 
   // 계약 검증. 실패하면 잘못된 이벤트를 보내는 대신 버린다.
   const parsed = OfficeEvent.safeParse(candidate)
+  return parsed.success ? parsed.data : null
+}
+
+/**
+ * 확인 창에 허락으로 답한 것으로 판단될 때(permission-state.ts permissionStep 의 clear)
+ * 그 요청자의 "?"를 지우는 `attention.clear{reason:'permission'}`.
+ * id: `<sessionId>/attention.clear/<key>` (key = tool_use_id 또는 새 서브에이전트 agent_id),
+ * 128자를 넘거나 key 가 없으면 새 ID. 계약 검증에 실패하면 null.
+ */
+export function attentionClear(
+  hookInput: unknown,
+  clear: { agentId: string; key?: string | undefined },
+  ctx: NormalizeContext,
+): OfficeEvent | null {
+  if (hookInput === null || typeof hookInput !== 'object' || Array.isArray(hookInput)) return null
+  const input = hookInput as HookInput
+  const sessionId = str(input.session_id)
+  if (!sessionId || !str(clear.agentId)) return null
+  const projectSource = ctx.projectDir ?? str(input.cwd)
+  const project = projectSource ? truncate(baseName(projectSource), 120) : ''
+  const parsed = OfficeEvent.safeParse({
+    v: SCHEMA_VERSION,
+    id: clear.key ? stableId([sessionId, 'attention.clear', clear.key], ctx) : ctx.newId(),
+    ts: ctx.now().toISOString(),
+    sessionId,
+    agentId: clear.agentId,
+    ...(project !== '' ? { project } : {}),
+    kind: 'attention.clear',
+    reason: 'permission',
+  })
   return parsed.success ? parsed.data : null
 }

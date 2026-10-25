@@ -210,6 +210,76 @@ describe('reduce — 시나리오', () => {
     expect(s.sessions.s1?.agents.main?.attention).toBeUndefined()
   })
 
+  it('attention.clear: 허락 뒤 "?" 해제, 진행 중 도구는 유지하고 working 으로', () => {
+    let s = run([
+      ev(0, { kind: 'tool.start', tool: { name: 'Bash', category: 'bash', useId: 'u1' } }),
+      ev(1, { kind: 'attention', reason: 'permission' }),
+    ])
+    expect(s.sessions.s1?.agents.main?.activity).toBe('waiting')
+    s = reduce(s, ev(2, { kind: 'attention.clear', reason: 'permission' }))
+    const m = s.sessions.s1?.agents.main
+    expect(m?.attention).toBeUndefined()
+    expect(m?.activity).toBe('working')
+    expect(m?.currentTool?.useId).toBe('u1')
+    expect(m?.lastEventAt).toBe(at(2))
+  })
+
+  it('attention.clear: 팀장이 Agent 호출을 허락 → 서브에이전트 입장과 함께 팀장 "?" 해제', () => {
+    let s = run([
+      ev(0, { kind: 'tool.start', tool: { name: 'Agent', category: 'agent', useId: 'a1' } }),
+      ev(1, { kind: 'attention', reason: 'permission' }),
+      ev(2, { kind: 'attention.clear', reason: 'permission' }),
+      ev(2, { kind: 'agent.spawn', agentType: 'Explore' }, 'sub'),
+    ])
+    expect(s.sessions.s1?.agents.main?.attention).toBeUndefined()
+    expect(s.sessions.s1?.agents.main?.activity).toBe('working')
+    expect(s.sessions.s1?.agents.main?.currentTool?.name).toBe('Agent')
+    // 서브에이전트가 일하는 동안 팀장 tool.end 가 없어도 "?"는 다시 생기지 않는다
+    s = reduce(s, ev(30, { kind: 'tool.start', tool: { name: 'Read', category: 'read' } }, 'sub'))
+    expect(s.sessions.s1?.agents.main?.attention).toBeUndefined()
+  })
+
+  it('attention.clear: reason 이 다르면 그대로, reason 이 없으면 사유와 관계없이 해제', () => {
+    let s = run([ev(0, { kind: 'attention', reason: 'other' })])
+    s = reduce(s, ev(1, { kind: 'attention.clear', reason: 'permission' }))
+    expect(s.sessions.s1?.agents.main?.attention).toBe('other')
+    expect(s.sessions.s1?.agents.main?.activity).toBe('waiting')
+    s = reduce(s, ev(2, { kind: 'attention.clear' }))
+    expect(s.sessions.s1?.agents.main?.attention).toBeUndefined()
+    expect(s.sessions.s1?.agents.main?.activity).toBe('working')
+  })
+
+  it('attention.clear: attention 이 없으면 activity 를 바꾸지 않는다', () => {
+    let s = run([ev(0, { kind: 'turn.end' })])
+    s = reduce(s, ev(1, { kind: 'attention.clear' }))
+    expect(s.sessions.s1?.agents.main?.activity).toBe('idle')
+  })
+
+  it('attention.clear: 없는 에이전트를 만들지 않고, 끝난 에이전트·세션을 되살리지 않는다', () => {
+    let s = run([ev(0, { kind: 'session.start' })])
+    const before = s
+    s = reduce(s, ev(1, { kind: 'attention.clear' }, 'ghost'))
+    expect(s).toBe(before)
+
+    s = run(
+      [
+        ev(2, { kind: 'agent.spawn' }, 'sub'),
+        ev(3, { kind: 'attention', reason: 'permission' }, 'sub'),
+        ev(4, { kind: 'agent.finish' }, 'sub'),
+        ev(5, { kind: 'attention.clear' }, 'sub'),
+      ],
+      s,
+    )
+    expect(s.sessions.s1?.agents.sub?.activity).toBe('gone')
+    expect(s.sessions.s1?.agents.sub?.finishedAt).toBe(at(4))
+
+    s = reduce(s, ev(6, { kind: 'session.end', reason: 'exit' }))
+    const ended = s
+    s = reduce(s, ev(7, { kind: 'attention.clear' }))
+    expect(s).toBe(ended)
+    expect(s.sessions.s1?.endedAt).toBe(at(6))
+  })
+
   it('session.end: 전원 gone, 이후 늦게 도착한 이벤트는 무시, 더 늦은 이벤트는 세션 재개', () => {
     let s = run([
       ev(0, { kind: 'session.start' }),
