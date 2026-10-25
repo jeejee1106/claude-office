@@ -145,6 +145,20 @@ describe('activity-mapping.md 와 1:1', () => {
     expect(unknown).toContain('자기 책상 `idle_sit` (soft)')
   })
 
+  it('attention.clear 행이 코드와 같다(resume, soft, 대사 없음)', () => {
+    const row = doc.split('\n').find((l) => l.startsWith('| `attention.clear`')) ?? ''
+    expect(KIND_ACTIVITY['attention.clear']).toEqual({
+      subject: 'self',
+      motion: 'resume',
+      soft: true,
+    })
+    expect(row).toContain('`resume`')
+    expect(row).toContain('soft')
+    expect(row).toContain('`currentTool`')
+    expect(row).toContain('자기 책상 `idle_sit`')
+    expect(row).toContain('대사 없음')
+  })
+
   it('필요한 애니메이션 목록이 ANIMATIONS 와 같다', () => {
     const section = doc.split('## 필요한 애니메이션 목록')[1] ?? ''
     const names = [...section.matchAll(/`(\w+)`/g)].map((m) => m[1])

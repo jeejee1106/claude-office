@@ -131,13 +131,16 @@ export function toolActivity(category: string): ToolActivity {
  * - stay : 제자리에서 anim (spot 없음)
  * - leave: 문으로 이동 후 퇴장
  * - tool : TOOL_ACTIVITY 로 위임
+ * - resume: 하던 일로 돌아감 — reduce 뒤 상태의 currentTool 이 있으면 그 도구의 자리·동작
+ *           (brief 도구는 자기 책상 idle_sit + 말풍선, 다시 걸지 않음), 없으면 자기 책상 idle_sit.
+ *           새 대사 없음, soft. director 가 상태를 보고 푼다(attention.clear)
  * - none : 이동 없음(표시만)
  *
  * subject: 행동하는 캐릭터. 'self' = 이벤트의 agentId, 'all' = 세션의 모든 캐릭터.
  */
 export interface KindActivity {
   subject: 'self' | 'all'
-  motion: 'enter' | 'goto' | 'stay' | 'leave' | 'tool' | 'none'
+  motion: 'enter' | 'goto' | 'stay' | 'leave' | 'tool' | 'resume' | 'none'
   spot?: SpotRef
   anim?: AnimName
   mark?: Mark
@@ -223,6 +226,9 @@ export const KIND_ACTIVITY: Readonly<Record<OfficeEventKind, KindActivity>> = {
     mark: 'question',
     line: 'attention',
   },
+  // 사용자가 확인에 답함(허락): "?"와 손들기를 거두고 하던 일로(resume). 대사 없음.
+  // "?"가 없거나 상태에 아직 attention 이 남아 있으면(reason 불일치) director 는 아무것도 하지 않는다
+  'attention.clear': { subject: 'self', motion: 'resume', soft: true },
   // 자료실 파쇄기 앞 shred + 종이 조각("정리 좀 할게요")
   'context.compact': {
     subject: 'self',

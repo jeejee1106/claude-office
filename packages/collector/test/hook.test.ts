@@ -206,19 +206,91 @@ describe('claude-office-hook 프로세스', () => {
         reason: 'permission',
         agentId: 'a4d1b0553338ecf74',
       })
-      // 그 서브에이전트의 도구가 끝나면 요청은 지워지고, 다음 확인 창은 main 으로 간다
+      // 그 서브에이전트의 도구가 끝나면(허락) [attention.clear, tool.end] 를 한 번에 보내고
+      // 요청은 지워져 다음 확인 창은 main 으로 간다
       const post = {
         hook_event_name: 'PostToolUse',
         session_id: sub.session_id,
         agent_id: sub.agent_id,
+        agent_type: sub.agent_type,
         tool_name: 'Bash',
         tool_use_id: 't-perm',
       }
+      const before = bodies.length
       await runHook(JSON.stringify(post), env)
+      expect(bodies).toHaveLength(before + 1)
+      const batch = bodies.at(-1)
+      expect(Array.isArray(batch)).toBe(true)
+      const events = (batch as unknown[]).map((e) => OfficeEvent.parse(e))
+      expect(events).toMatchObject([
+        {
+          kind: 'attention.clear',
+          reason: 'permission',
+          agentId: 'a4d1b0553338ecf74',
+          id: `${String(sub.session_id)}/attention.clear/t-perm`,
+        },
+        { kind: 'tool.end', agentId: 'a4d1b0553338ecf74', status: 'ok' },
+      ])
       await runHook(fixture('Notification.permission_prompt.json'), env)
       expect(bodies.at(-1)).toMatchObject({ kind: 'attention', agentId: 'main' })
     } finally {
       rmSync(stateDir, { recursive: true, force: true })
     }
+  })
+
+  it('메인 Agent 허락: SubagentStart 한 번에 [attention.clear(main), agent.spawn]', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'co-hook-agent-'))
+    const bodies: unknown[] = []
+    server = createServer((req, res) => {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        bodies.push(JSON.parse(body))
+        res.writeHead(202)
+        res.end()
+      })
+    })
+    await new Promise<void>((r) => server?.listen(0, '127.0.0.1', r))
+    const { port } = server.address() as AddressInfo
+    const env = {
+      CLAUDE_OFFICE_URL: `http://127.0.0.1:${port}/events`,
+      CLAUDE_OFFICE_STATE_DIR: stateDir,
+    }
+    try {
+      const perm = JSON.parse(fixture('PermissionRequest.json')) as Record<string, unknown>
+      await runHook(JSON.stringify({ ...perm, tool_name: 'Agent', tool_input: {} }), env)
+      await runHook(fixture('Notification.permission_prompt.json'), env)
+      const before = bodies.length
+      await runHook(fixture('SubagentStart.json'), env)
+      expect(bodies).toHaveLength(before + 1)
+      expect(bodies.at(-1)).toMatchObject([
+        { kind: 'attention.clear', agentId: 'main' },
+        { kind: 'agent.spawn', agentId: 'a9d6fcc6fccdd5788' },
+      ])
+      // 자동 허용(확인 창 없음)이면 단일 객체만
+      await runHook(JSON.stringify({ ...perm, tool_name: 'Agent', tool_input: {} }), env)
+      await runHook(fixture('SubagentStart.nested.json'), env)
+      const last = bodies.at(-1)
+      expect(Array.isArray(last)).toBe(false)
+      expect(last).toMatchObject({ kind: 'agent.spawn', agentId: 'a473c5664f8a7266d' })
+    } finally {
+      rmSync(stateDir, { recursive: true, force: true })
+    }
+  })
+
+  it('유령 SubagentStop(agent_type 빈 값)은 보내지 않는다', async () => {
+    let hits = 0
+    server = createServer((_req, res) => {
+      hits++
+      res.end()
+    })
+    await new Promise<void>((r) => server?.listen(0, '127.0.0.1', r))
+    const { port } = server.address() as AddressInfo
+    const ghost = { ...JSON.parse(fixture('SubagentStop.json')), agent_type: '' }
+    const r = await runHook(JSON.stringify(ghost), {
+      CLAUDE_OFFICE_URL: `http://127.0.0.1:${port}/events`,
+    })
+    expect(r.code).toBe(0)
+    expect(hits).toBe(0)
   })
 })

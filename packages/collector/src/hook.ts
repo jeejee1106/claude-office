@@ -1,12 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { MAIN_AGENT_ID } from '@claude-office/shared'
+import type { OfficeEvent } from '@claude-office/shared'
 import { maybeCapture } from './capture'
-import { normalize } from './normalize'
-import {
-  forgetPermissionRequest,
-  latestPermissionRequester,
-  rememberPermissionRequest,
-} from './permission-state'
+import { attentionClear, normalize } from './normalize'
+import { trackPermission } from './permission-state'
 import { DEFAULT_URL, postJson, SEND_TIMEOUT_MS } from './send'
 
 /*
@@ -53,36 +49,6 @@ function readStdin(): Promise<string | null> {
   })
 }
 
-/**
- * 권한 요청자 추적(permission-state.ts 참고). Notification(permission_prompt) 이면
- * 귀속할 에이전트를 돌려준다.
- */
-function trackPermission(input: unknown, nowMs: number): string | undefined {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
-  const i = input as Record<string, unknown>
-  const sessionId = typeof i.session_id === 'string' ? i.session_id : undefined
-  if (!sessionId) return undefined
-  const agentId = typeof i.agent_id === 'string' && i.agent_id !== '' ? i.agent_id : MAIN_AGENT_ID
-  switch (i.hook_event_name) {
-    case 'PermissionRequest':
-      rememberPermissionRequest(sessionId, agentId, nowMs)
-      return undefined
-    case 'PostToolUse':
-    case 'PostToolUseFailure':
-      forgetPermissionRequest(sessionId, agentId, nowMs)
-      return undefined
-    case 'SessionEnd':
-      forgetPermissionRequest(sessionId, undefined, nowMs)
-      return undefined
-    case 'Notification':
-      return i.notification_type === 'permission_prompt'
-        ? latestPermissionRequester(sessionId, nowMs)
-        : undefined
-    default:
-      return undefined
-  }
-}
-
 async function main(): Promise<void> {
   if (process.env.CLAUDE_OFFICE_DISABLE === '1') return
   const raw = await readStdin()
@@ -98,14 +64,23 @@ async function main(): Promise<void> {
     return
   }
   maybeCapture(input)
-  const permissionRequester = trackPermission(input, Date.now())
-  const event = normalize(input, {
-    now: () => new Date(),
+  const now = new Date()
+  const permission = trackPermission(input, now.getTime())
+  const ctx = {
+    now: () => now,
     newId: randomUUID,
     projectDir: process.env.CLAUDE_PROJECT_DIR || undefined,
-    permissionRequester,
-  })
-  if (!event) {
+    permissionRequester: permission.requester,
+  }
+  // 허락으로 판단되면 [attention.clear, 원래 이벤트] 를 POST 한 번에 배열로(ADR 0002).
+  const events: OfficeEvent[] = []
+  if (permission.clear) {
+    const clear = attentionClear(input, permission.clear, ctx)
+    if (clear) events.push(clear)
+  }
+  const event = normalize(input, ctx)
+  if (event) events.push(event)
+  if (events.length === 0) {
     const name =
       input && typeof input === 'object' && 'hook_event_name' in input
         ? String(input.hook_event_name)
@@ -113,10 +88,12 @@ async function main(): Promise<void> {
     log(`ignored hook ${name}`)
     return
   }
+  const kinds = events.map((e) => e.kind).join('+')
+  const body = JSON.stringify(events.length === 1 ? events[0] : events)
   const url = process.env.CLAUDE_OFFICE_URL || DEFAULT_URL
-  const res = await postJson(url, JSON.stringify(event), SEND_TIMEOUT_MS)
-  if (res.ok) log(`${event.kind} → ${res.status}`)
-  else log(`${event.kind} not sent: ${res.error}`)
+  const res = await postJson(url, body, SEND_TIMEOUT_MS)
+  if (res.ok) log(`${kinds} → ${res.status}`)
+  else log(`${kinds} not sent: ${res.error}`)
 }
 
 process.on('uncaughtException', (err) => {

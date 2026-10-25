@@ -98,6 +98,17 @@ export const AttentionEvent = EventBase.extend({
   reason: AttentionReason,
 })
 
+/**
+ * 확인 요청이 끝남(사용자가 답함). collector 가 요청한 에이전트의 PostToolUse/PostToolUseFailure,
+ * 또는 요청 도구가 Agent 일 때 같은 세션의 SubagentStart 에서 보낸다(2026-10-24, ADR 0002).
+ * reason 이 있으면 그 사유의 attention 만 지운다. 없으면 사유와 관계없이 지운다.
+ * 구버전 소비자는 모르는 kind 로 버린다 → "?"가 예전처럼 다음 도구/턴 끝까지 남을 뿐이다.
+ */
+export const AttentionClearEvent = EventBase.extend({
+  kind: z.literal('attention.clear'),
+  reason: AttentionReason.optional(),
+})
+
 export const ContextCompactEvent = EventBase.extend({
   kind: z.literal('context.compact'),
   trigger: z.enum(['manual', 'auto']).optional().catch(undefined),
@@ -121,6 +132,7 @@ export const OfficeEvent = z.discriminatedUnion('kind', [
   AgentFinishEvent,
   TurnEndEvent,
   AttentionEvent,
+  AttentionClearEvent,
   ContextCompactEvent,
   AgentIdleEvent,
 ])
@@ -139,6 +151,7 @@ export const OFFICE_EVENT_KINDS = [
   'agent.finish',
   'turn.end',
   'attention',
+  'attention.clear',
   'context.compact',
   'agent.idle',
 ] as const satisfies readonly OfficeEventKind[]

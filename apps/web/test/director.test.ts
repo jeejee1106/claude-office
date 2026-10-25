@@ -489,6 +489,123 @@ describe('director 시나리오', () => {
     expect(LINES.ko.errorRepeated).toContain(act3.say)
   })
 
+  describe('attention.clear (사용자가 확인에 답함)', () => {
+    const bash = { name: 'Bash', category: 'bash', target: 'git', useId: 'ub' }
+    const agentTool = { name: 'Agent', category: 'agent', target: 'Explore', useId: 'ua' }
+    const cmdsOf = (r: ReturnType<typeof run>, id: string) =>
+      r.out.find((o) => o.event.id === id)?.cmds ?? []
+
+    it('Bash 허락 → "?" 해제 + 서버실 터미널 동작(말풍선·LED) 유지, 대사 없음 → tool.end 로 책상 복귀', () => {
+      const r = run([
+        ev({ id: 'b1', kind: 'session.start' }),
+        ev({ id: 'b2', kind: 'tool.start', tool: bash }),
+        ev({ id: 'b3', kind: 'attention', reason: 'permission' }),
+        ev({ id: 'b4', kind: 'attention.clear', reason: 'permission' }),
+        ev({ id: 'b5', kind: 'tool.end', tool: bash, status: 'ok' }),
+      ])
+      expect(cmdsOf(r, 'b3')).toContainEqual(
+        expect.objectContaining({ type: 'mark', mark: 'question', durationMs: null }),
+      )
+      expect(cmdsOf(r, 'b4')).toEqual([
+        { type: 'mark', agentId: 'main', cause: 'b4', mark: null, durationMs: null },
+        expect.objectContaining({
+          type: 'moveTo',
+          spot: 'serverTerminal',
+          anim: 'type',
+          bubble: '>_ git',
+          soft: true,
+          say: null,
+        }),
+        { type: 'servers', busy: true, cause: 'b4' },
+      ])
+      // 손들기(raise_hand)를 다시 하지 않는다
+      expect(cmdsOf(r, 'b4').some((c) => c.type === 'act')).toBe(false)
+      expect(r.state.sessions.s?.agents.main?.attention).toBeUndefined()
+      expect(cmdsOf(r, 'b5')).toContainEqual(
+        expect.objectContaining({ type: 'moveTo', spot: 'mainDesk', anim: 'idle_sit', soft: true }),
+      )
+    })
+
+    it('clear 직후 모습은 상태로 다시 배치(syncAll)한 모습과 같다', () => {
+      const r = run([
+        ev({ kind: 'session.start' }),
+        ev({ kind: 'tool.start', tool: bash }),
+        ev({ kind: 'attention', reason: 'permission' }),
+        ev({ id: 'c4', kind: 'attention.clear', reason: 'permission' }),
+      ])
+      const move = cmdsOf(r, 'c4').find((c) => c.type === 'moveTo')
+      const placed = new Director({ now: () => 0 })
+        .syncAll(r.state, 's')
+        .find((c) => c.type === 'place' && c.agentId === 'main')
+      expect(placed).toMatchObject({
+        spot: (move as { spot: string }).spot,
+        anim: (move as { anim: string }).anim,
+        bubble: (move as { bubble: string }).bubble,
+        mark: null,
+      })
+    })
+
+    it('Agent 허락 → "?" 해제(전화는 다시 걸지 않고 자기 책상 idle_sit + 📞) 후 팀원 입장', () => {
+      const r = run([
+        ev({ id: 'a1', kind: 'session.start' }),
+        ev({ id: 'a2', kind: 'tool.start', tool: agentTool }),
+        ev({ id: 'a3', kind: 'attention', reason: 'permission' }),
+        ev({ id: 'a4', kind: 'attention.clear', reason: 'permission' }),
+        ev({ id: 'a5', kind: 'agent.spawn', agentId: 'sub-a', agentType: 'Explore' }),
+      ])
+      expect(cmdsOf(r, 'a4')).toEqual([
+        expect.objectContaining({ type: 'mark', agentId: 'main', mark: null }),
+        expect.objectContaining({
+          type: 'moveTo',
+          agentId: 'main',
+          spot: 'mainDesk',
+          anim: 'idle_sit',
+          bubble: '📞 Explore',
+          soft: true,
+        }),
+      ])
+      expect(
+        cmdsOf(r, 'a4').some((c) => 'anim' in c && (c as { anim: string }).anim === 'phone_sit'),
+      ).toBe(false)
+      expect(charCmds(cmdsOf(r, 'a5'), 'sub-a')[0]).toMatchObject({ type: 'spawn' })
+      // 이후 팀장 쪽 명령에 "?" 가 다시 붙지 않는다
+      expect(charCmds(cmdsOf(r, 'a5'), 'main')).toEqual([])
+    })
+
+    it('진행 중 도구가 없으면 자기 책상 idle_sit(soft)', () => {
+      const r = run([
+        ev({ kind: 'session.start' }),
+        ev({ kind: 'agent.spawn', agentId: 'p', agentType: 'Plan' }),
+        ev({ kind: 'attention', agentId: 'p', reason: 'permission' }),
+        ev({ id: 'd4', kind: 'attention.clear', agentId: 'p' }),
+      ])
+      expect(cmdsOf(r, 'd4')).toEqual([
+        expect.objectContaining({ type: 'mark', agentId: 'p', mark: null }),
+        expect.objectContaining({
+          type: 'moveTo',
+          spot: 'planning1',
+          anim: 'idle_sit',
+          soft: true,
+        }),
+      ])
+    })
+
+    it('"?" 가 없거나 reason 이 다르거나 모르는 에이전트면 아무것도 하지 않는다(캐릭터도 만들지 않음)', () => {
+      const r = run([
+        ev({ kind: 'session.start' }),
+        ev({ id: 'x1', kind: 'attention.clear' }),
+        ev({ kind: 'attention', reason: 'permission' }),
+        ev({ id: 'x3', kind: 'attention.clear', reason: 'idle' }),
+        ev({ id: 'x4', kind: 'attention.clear', agentId: 'ghost' }),
+      ])
+      expect(cmdsOf(r, 'x1')).toEqual([])
+      expect(cmdsOf(r, 'x3')).toEqual([])
+      expect(r.state.sessions.s?.agents.main?.attention).toBe('permission')
+      expect(cmdsOf(r, 'x4')).toEqual([])
+      expect(r.director.characterIds()).toEqual(['main'])
+    })
+  })
+
   it('영어 옵션: lang 이 en 이면 대사도 영어', () => {
     const d = new Director({ now: () => 0, lang: () => 'en' })
     const { out } = run([ev({ kind: 'session.start' })], d)

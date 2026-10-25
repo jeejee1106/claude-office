@@ -6,11 +6,25 @@ import { OfficeState } from './state'
  * 서버 → web WebSocket 메시지. web 은 safeParse 후 실패하면 무시한다(모르는 type 포함).
  */
 
+/**
+ * 항목별로 검증해 통과한 이벤트만 남기는 배열. 서버가 이 web 보다 새 kind 를 알 때
+ * 모르는 이벤트 하나 때문에 snapshot 전체가 버려지지 않게 한다(2026-10-24, ADR 0002).
+ */
+const LenientEventList = z.array(z.unknown()).transform((items) =>
+  items.flatMap((item) => {
+    const r = OfficeEvent.safeParse(item)
+    return r.success ? [r.data] : []
+  }),
+)
+
 export const SnapshotMessage = z.object({
   type: z.literal('snapshot'),
   state: OfficeState,
-  /** 최근 이벤트(오래된 것 → 최신 순, 최대 RECENT_EVENTS_LIMIT). 타임라인 초기화용 */
-  recent: z.array(OfficeEvent),
+  /**
+   * 최근 이벤트(오래된 것 → 최신 순, 최대 RECENT_EVENTS_LIMIT). 타임라인 초기화용.
+   * 검증에 실패한 항목(모르는 kind 등)은 조용히 빠진다.
+   */
+  recent: LenientEventList,
   /** 서버 시각. web 이 isAsleep 등 시간 계산을 서버 시계에 맞출 때 쓴다. */
   ts: IsoTimestamp,
 })

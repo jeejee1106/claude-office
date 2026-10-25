@@ -1,4 +1,4 @@
-# OfficeEvent 카탈로그 (v1 — 2026-10-21 확정)
+# OfficeEvent 카탈로그 (v1 — 2026-10-21 확정, 2026-10-24 `attention.clear` 추가)
 
 사람이 읽는 명세다. 코드(`packages/shared/src/event.ts`)와 이 문서가 다르면 버그다. 계약을 바꿀 때 함께 갱신한다.
 
@@ -32,7 +32,8 @@
 | `agent.spawn` | SubagentStart 또는 PreToolUse(tool=Agent/Task) | `agentType?`(≤60자), `description?`(≤120자) | 새 직원 입장 |
 | `agent.finish` | SubagentStop | `status?`: ok \| error | 직원 퇴장 |
 | `turn.end` | Stop | | 메인 에이전트 한 턴 종료 — 휴식 |
-| `attention` | Notification / PermissionRequest | `reason`: permission \| idle \| other | 사용자 확인 필요 — 손 들기 |
+| `attention` | Notification(permission_prompt 등. idle_prompt 제외) | `reason`: permission \| idle \| other | 사용자 확인 필요 — 손 들기 |
+| `attention.clear` | 요청 에이전트의 PostToolUse / PostToolUseFailure, 요청 도구가 Agent 면 같은 세션의 SubagentStart (collector 가 판단, 2026-10-24 추가, ADR 0002) | `reason?`: permission \| idle \| other (모르는 값 → other) | 사용자가 답함 — "?" 내리고 하던 일로. 구버전 소비자는 모르는 kind 로 버린다 |
 | `context.compact` | PreCompact | `trigger?`: manual \| auto | 서류 정리(파쇄기) |
 | `agent.idle` | **서버 전용** (hub 비활성 타이머의 `idleSweep`) | 없음 | 60초 무활동 — 자기 책상 `idle_sit`. collector는 보내지 않는다 |
 
@@ -68,7 +69,7 @@
 
 | type | 페이로드 | 시점 |
 | --- | --- | --- |
-| `snapshot` | `state: OfficeState`, `recent: OfficeEvent[]`(오래된→최신, ≤500), `ts`(서버 시각) | 접속 직후 1회 |
+| `snapshot` | `state: OfficeState`, `recent: OfficeEvent[]`(오래된→최신, ≤500, **항목별 검증 — 모르는 kind 는 그 항목만 빠짐**, 2026-10-24), `ts`(서버 시각) | 접속 직후 1회 |
 | `event` | `event: OfficeEvent` | 이벤트 수신마다 |
 | `heartbeat` | `ts` | 주기적 (연결 확인) |
 
@@ -99,6 +100,7 @@ AgentState   = { id, parentId?, type?, description?,
 | `agent.finish` | `gone`, `finishedAt`. 이후 ts ≤ finishedAt 인 이벤트는 메타데이터만 반영(spawn이 늦게 와도 되살아나지 않음) |
 | `turn.end` | `idle`, 도구·attention 해제 |
 | `attention` | `waiting`, `attention=reason` |
+| `attention.clear` | 없는 에이전트·종료된 세션이면 무시(만들지도 다시 열지도 않음), `finishedAt` 이후여도 되살리지 않음. attention 이 없거나 `reason`이 지금 attention 과 다르면 그대로. 아니면 attention 해제, `waiting`이면 `working`(`currentTool` 유지) |
 | `context.compact` | `lastEventAt`만 |
 | `agent.idle` | 존재하는 `working` 에이전트만 `idle` + 도구 해제 |
 | `session.end` | `endedAt`/`endReason`, 전원 `gone`. 이후 ts ≤ endedAt 이벤트 무시, ts > endedAt 이벤트는 세션 재개. 종료 세션은 최근 10개(`MAX_ENDED_SESSIONS`)만 유지 |

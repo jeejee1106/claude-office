@@ -61,6 +61,7 @@
 | `agent.finish` | 팀장 책상 쪽을 보고 `report` 0.4초 → 그 자리에 `idle_stand` 3초 머묾 → 문으로 퇴장 | `subFinish` "퇴근하겠습니다!" (퇴장 내내, 약 4.8초) |
 | `turn.end` | 휴게실에서 쉼 — 이벤트 id 해시(`pickLoungeRest`, 접두사 `lounge:`)로 셋 중 하나: 커피머신 `coffee` 에서 `idle_drink` + 김 나는 컵(`steam`) / 소파 `sofaSit` 에서 `sofa_sit` / 소파 `sofaLie` 에서 `sofa_lie`. 고른 소파 자리가 없으면(휴게실 행의 소파 규칙) 커피. 김은 커피일 때만 | `turnEnd` "휴~" (도착할 때, 셋 공통) |
 | `attention` | 해당 캐릭터 `raise_hand` + 깜빡이는 "?" (사용자 확인 필요) | `attention` "확인 부탁드려요!" |
+| `attention.clear` (사용자가 확인에 답함 — 허락) | "?" 를 내리고 손을 내려 하던 일로(`resume`, soft): 상태(reduce 뒤)에 `currentTool` 이 있으면 그 도구의 자리·동작과 말풍선(예: `bash` → 서버실 터미널 `type`, LED 다시 busy). `agent`(brief 전화)는 다시 걸지 않고 자기 책상 `idle_sit` + 📞 말풍선. 진행 중 도구가 없으면 자기 책상 `idle_sit`. "?" 가 이미 없거나, 상태에 attention 이 남아 있으면(reason 불일치) 아무것도 하지 않음. 화면에 없는 캐릭터를 새로 만들지 않음. 일반 도구는 collector 가 `[attention.clear, tool.end]` 를 함께 보내므로 soft 이동은 건너뛰고 바로 책상 복귀 | — (대사 없음) |
 | `context.compact` | 자료실 파쇄기 앞 `shred` + 종이 조각 이펙트 | `compact` "정리 좀 할게요" (도착할 때) |
 | `session.end` | 전원 `pack`(짐 챙기기) 0.4초 → 가방 들고 문으로 퇴장. 마지막 사람이 나가면 조명 꺼짐 | `sessionEnd` "퇴근하겠습니다!" (퇴장 내내) |
 | `agent.idle` (서버가 60초 무활동 시 생성) | 자기 책상 `idle_sit`, `isAsleep()`(5분)이면 `sleep` (Zzz). 예외: 소파에 누워(`sofaLie`) 있으면 책상으로 가지 않고 그 자리에서 Zzz 만(주기 검사 `refreshSleep` 도 같음) | — |

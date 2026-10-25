@@ -1,6 +1,6 @@
 import { OfficeEvent } from '@claude-office/shared'
 import { describe, expect, it } from 'vitest'
-import { normalize } from '../src/normalize'
+import { attentionClear, normalize } from '../src/normalize'
 import { fixedContext, fixtureNames, loadFixture } from './helpers'
 
 /** normalize 결과가 null 이어야 하는 fixture (매핑하지 않는 알림 종류) */
@@ -281,6 +281,73 @@ describe('normalize: 매핑 세부', () => {
       kind: 'tool.start',
       tool: { name: 'BrandNewTool', category: 'other' },
     })
+  })
+})
+
+describe('normalize: 유령 서브에이전트 (C5)', () => {
+  it.each([
+    ['agent_type 빈 문자열', ''],
+    ['agent_type 없음', undefined],
+  ])('SubagentStop %s → null', (_label, agentType) => {
+    const input = { ...loadFixture('SubagentStop.json'), agent_type: agentType }
+    expect(normalize(input, fixedContext())).toBeNull()
+  })
+
+  it.each([
+    ['agent_type 빈 문자열', ''],
+    ['agent_type 없음', undefined],
+  ])('SubagentStart %s → null', (_label, agentType) => {
+    const input = { ...loadFixture('SubagentStart.json'), agent_type: agentType }
+    expect(normalize(input, fixedContext())).toBeNull()
+  })
+
+  it('실제 서브에이전트(Explore)는 그대로 통과', () => {
+    expect(normalize(loadFixture('SubagentStart.json'), fixedContext())).toMatchObject({
+      kind: 'agent.spawn',
+      agentType: 'Explore',
+    })
+    expect(normalize(loadFixture('SubagentStop.json'), fixedContext())).toMatchObject({
+      kind: 'agent.finish',
+    })
+  })
+})
+
+describe('attentionClear (C4)', () => {
+  it('요청자 agentId, reason permission, 결정적 id', () => {
+    const post = loadFixture('PostToolUse.Bash.json')
+    const e = attentionClear(
+      post,
+      { agentId: 'main', key: String(post.tool_use_id) },
+      fixedContext(),
+    )
+    expect(e).toMatchObject({
+      kind: 'attention.clear',
+      reason: 'permission',
+      agentId: 'main',
+      sessionId: post.session_id,
+      project: 'demo-app',
+      id: `${String(post.session_id)}/attention.clear/${String(post.tool_use_id)}`,
+    })
+    expect(OfficeEvent.parse(e)).toEqual(e)
+    expect(JSON.stringify(e)).not.toContain('/Users/')
+  })
+
+  it('서브에이전트 요청자에게도, 키가 없거나 너무 길면 새 ID', () => {
+    const start = loadFixture('SubagentStart.json')
+    const e = attentionClear(start, { agentId: 'a4d1b0553338ecf74' }, fixedContext())
+    expect(e).toMatchObject({ agentId: 'a4d1b0553338ecf74', id: 'id-1' })
+    const long = attentionClear(start, { agentId: 'main', key: 'k'.repeat(200) }, fixedContext())
+    expect(long?.id).toBe('id-1')
+  })
+
+  it('잘못된 입력 → null', () => {
+    expect(attentionClear(null, { agentId: 'main' }, fixedContext())).toBeNull()
+    expect(
+      attentionClear({ hook_event_name: 'Stop' }, { agentId: 'main' }, fixedContext()),
+    ).toBeNull()
+    expect(
+      attentionClear(loadFixture('Stop.json'), { agentId: 'x'.repeat(300) }, fixedContext()),
+    ).toBeNull()
   })
 })
 

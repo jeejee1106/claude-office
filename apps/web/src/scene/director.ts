@@ -234,6 +234,13 @@ export class Director {
     if (agent?.activity === 'gone') return out
     if (session?.endedAt !== undefined) return out
 
+    if (act.motion === 'resume') {
+      // attention.clear: 정리용 이벤트라 캐릭터를 새로 만들지 않는다(상태도 유령 에이전트를 만들지 않음)
+      const known = this.chars.get(e.agentId)
+      if (known !== undefined) this.resume(known, agent, act, out, cause)
+      return out
+    }
+
     let info = this.chars.get(e.agentId)
     if (info === undefined) {
       const type = e.kind === 'agent.spawn' ? e.agentType : agent?.type
@@ -338,6 +345,7 @@ export class Director {
           out.push(this.moveCmd(info, 'ownDesk', 'idle_sit', cause, { soft: true }))
         }
         break
+      case 'resume':
       case 'none':
       case 'leave':
         break
@@ -373,6 +381,50 @@ export class Director {
   }
 
   // -------------------------------------------------------------------------
+
+  /**
+   * 사용자가 확인에 답함(attention.clear): "?"와 손들기를 거두고 하던 일로 돌아간다.
+   * - "?"가 없으면(이미 다른 이벤트가 지움) 아무것도 하지 않는다.
+   * - reduce 뒤에도 attention 이 남아 있으면(reason 불일치 등) 서버 상태를 따라 그대로 둔다.
+   * - currentTool 이 있으면 그 도구의 자리·동작(말풍선 복원). brief 도구(전화)는 다시 걸지 않고
+   *   자기 책상 idle_sit + 말풍선 — syncAll 의 placementFor 와 같은 최종 모습. 없으면 자기 책상 idle_sit.
+   * - 새 대사 없음. soft: 같은 POST 로 tool.end 가 바로 뒤따르면(일반 도구) 큐에서 건너뛴다.
+   */
+  private resume(
+    info: CharInfo,
+    agent: AgentState | undefined,
+    act: KindActivity,
+    out: DirectorOutput[],
+    cause: string,
+  ): void {
+    if (info.persistentMark !== 'question') return
+    if (agent?.attention !== undefined) return
+
+    out.push(this.markCmd(info, null, null, cause))
+    info.persistentMark = null
+    info.asleep = false
+
+    const tool = agent?.currentTool
+    const soft = act.soft === true
+    if (tool === undefined) {
+      info.bash = false
+      out.push(this.moveCmd(info, act.spot ?? 'ownDesk', act.anim ?? 'idle_sit', cause, { soft }))
+    } else {
+      const ta = toolActivity(tool.category)
+      info.bash = tool.category === 'bash'
+      const bubble = ta.bubble(tool)
+      out.push(
+        ta.brief === true
+          ? this.moveCmd(info, 'ownDesk', 'idle_sit', cause, { bubble, soft })
+          : this.moveCmd(info, ta.spot, ta.anim, cause, {
+              bubble,
+              effect: ta.effect ?? null,
+              soft,
+            }),
+      )
+    }
+    this.updateServers(out, cause)
+  }
 
   private placementFor(agent: AgentState): {
     spot: SpotRef

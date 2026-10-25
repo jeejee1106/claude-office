@@ -74,6 +74,24 @@ describe('OfficeEvent schema', () => {
     expect(att.kind === 'attention' && att.reason).toBe('other')
   })
 
+  it('attention.clear: reason 은 선택, 모르는 reason 은 other', () => {
+    const base = {
+      v: 1,
+      id: 'c',
+      ts: '2026-01-01T00:00:00.000Z',
+      sessionId: 's',
+      agentId: 'main',
+      kind: 'attention.clear',
+    }
+    const plain = OfficeEvent.parse(base)
+    expect(plain.kind).toBe('attention.clear')
+    expect(plain.kind === 'attention.clear' && plain.reason).toBeUndefined()
+    const perm = OfficeEvent.parse({ ...base, reason: 'permission' })
+    expect(perm.kind === 'attention.clear' && perm.reason).toBe('permission')
+    const odd = OfficeEvent.parse({ ...base, reason: 'something-new' })
+    expect(odd.kind === 'attention.clear' && odd.reason).toBe('other')
+  })
+
   it('target 60자 초과는 거부한다(collector 가 잘라 보내야 함)', () => {
     const r = OfficeEvent.safeParse({
       v: 1,
@@ -159,5 +177,28 @@ describe('ServerMessage schema', () => {
     expect(ServerMessage.safeParse({ type: 'event', event: first }).success).toBe(true)
     expect(ServerMessage.safeParse({ type: 'heartbeat', ts }).success).toBe(true)
     expect(ServerMessage.safeParse({ type: 'hello' }).success).toBe(false)
+  })
+
+  it('snapshot.recent 의 모르는 kind 는 그 항목만 빠지고 snapshot 은 살아남는다', () => {
+    const [first] = loadSample()
+    const ts = '2026-01-01T00:00:00.000Z'
+    const future = {
+      v: 1,
+      id: 'f',
+      ts,
+      sessionId: 's',
+      agentId: 'main',
+      kind: 'future.kind',
+    }
+    const r = ServerMessage.safeParse({
+      type: 'snapshot',
+      state: { sessions: {} },
+      recent: [first, future],
+      ts,
+    })
+    expect(r.success).toBe(true)
+    expect(r.success && r.data.type === 'snapshot' && r.data.recent).toHaveLength(1)
+    // event 메시지는 그대로 실패(web 이 버린다)
+    expect(ServerMessage.safeParse({ type: 'event', event: future }).success).toBe(false)
   })
 })

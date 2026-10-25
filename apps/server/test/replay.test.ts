@@ -125,4 +125,61 @@ describe('--record', () => {
     const lines = parseJsonl(readFileSync(file, 'utf8'))
     expect(lines.events.map((x) => x.id)).toEqual(['rec-1'])
   })
+
+  it('records attention.clear as-is and replay re-applies it ("?" cleared again)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'co-rec-'))
+    const file = join(dir, 'rec.jsonl')
+    const app = await buildApp({
+      recordFile: file,
+      sweepIntervalMs: 0,
+      heartbeatMs: 0,
+      webDistDir: false,
+    })
+    const bash = { name: 'Bash', category: 'shell', useId: 'tu-1' }
+    const base = Date.now() - 3_000
+    const at = (ms: number) => new Date(base + ms).toISOString()
+    const batch = [
+      makeEvent({ sessionId: 'rs', kind: 'tool.start', tool: bash, ts: at(0) }),
+      makeEvent({ sessionId: 'rs', kind: 'attention', reason: 'permission', ts: at(1000) }),
+    ]
+    await app.inject({ method: 'POST', url: '/events', payload: batch })
+    await app.inject({
+      method: 'POST',
+      url: '/events',
+      payload: [
+        makeEvent({ sessionId: 'rs', kind: 'attention.clear', reason: 'permission', ts: at(2000) }),
+        makeEvent({ sessionId: 'rs', kind: 'tool.end', tool: bash, status: 'ok', ts: at(2000) }),
+      ],
+    })
+    await app.close()
+
+    const parsed = parseJsonl(readFileSync(file, 'utf8'))
+    expect(parsed.skipped).toEqual([])
+    expect(parsed.events.map((x) => x.kind)).toEqual([
+      'tool.start',
+      'attention',
+      'attention.clear',
+      'tool.end',
+    ])
+    const clear = parsed.events[2]
+    expect(clear?.kind === 'attention.clear' && clear.reason).toBe('permission')
+
+    // prepareReplay 가 새 kind 를 버리지 않는다.
+    const sched = prepareReplay(parsed.events, { startAt: base, speed: 1, suffix: 'x' })
+    expect(sched.map((s) => s.event.kind)).toContain('attention.clear')
+
+    vi.useFakeTimers()
+    vi.setSystemTime(base)
+    const hub = new Hub()
+    const seen: string[] = []
+    const r = startReplay(hub, parsed.events, { speed: 1000, makeSuffix: () => 'rp' })
+    // 재생 중간: attention 까지 반영된 시점
+    await vi.advanceTimersByTimeAsync(1)
+    seen.push(hub.getState().sessions['rs-rp']?.agents.main?.attention ?? 'none')
+    await vi.advanceTimersByTimeAsync(10)
+    await r.done
+    seen.push(hub.getState().sessions['rs-rp']?.agents.main?.attention ?? 'none')
+    expect(seen).toEqual(['permission', 'none'])
+    expect(hub.getState().sessions['rs-rp']?.agents.main?.activity).toBe('working')
+  })
 })

@@ -1,4 +1,4 @@
-import { IngestResponse, OfficeState } from '@claude-office/shared'
+import { IngestResponse, OfficeState, SnapshotMessage } from '@claude-office/shared'
 import type { FastifyInstance } from 'fastify'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildApp } from '../src/app'
@@ -90,6 +90,74 @@ describe('POST /events', () => {
     expect(s?.endReason).toBe('exit')
     expect(s?.agents.main?.activity).toBe('gone')
     expect(s?.agents['sub-a']?.activity).toBe('gone')
+  })
+})
+
+describe('attention.clear (ADR 0002)', () => {
+  const bash = { name: 'Bash', category: 'shell', target: 'pnpm', useId: 'tu-1' }
+  const at = (sec: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, sec)).toISOString()
+  const askPermission = async () => {
+    await post([
+      makeEvent({ kind: 'tool.start', tool: bash, ts: at(1) }),
+      makeEvent({ kind: 'attention', reason: 'permission', ts: at(2) }),
+    ])
+    const main = (await state()).sessions.s1?.agents.main
+    expect(main?.attention).toBe('permission')
+    expect(main?.activity).toBe('waiting')
+  }
+
+  it('accepts the collector batch [attention.clear, tool.end] with 202 and clears "?"', async () => {
+    await askPermission()
+    const res = await post([
+      makeEvent({ kind: 'attention.clear', reason: 'permission', ts: at(3) }),
+      makeEvent({ kind: 'tool.end', tool: bash, status: 'ok', ts: at(3) }),
+    ])
+    expect(res.statusCode).toBe(202)
+    expect(IngestResponse.parse(res.json())).toEqual({ accepted: 2, duplicates: 0, rejected: [] })
+    const main = (await state()).sessions.s1?.agents.main
+    expect(main?.attention).toBeUndefined()
+    expect(main?.activity).toBe('working')
+    expect(main?.currentTool).toBeUndefined()
+  })
+
+  it('without attention.clear, tool.end alone keeps "?" (why the clear is needed)', async () => {
+    await askPermission()
+    await post(makeEvent({ kind: 'tool.end', tool: bash, status: 'ok', ts: at(3) }))
+    expect((await state()).sessions.s1?.agents.main?.attention).toBe('permission')
+  })
+
+  it('clear alone keeps the running tool and goes back to working', async () => {
+    await askPermission()
+    await post(makeEvent({ kind: 'attention.clear', ts: at(3) }))
+    const main = (await state()).sessions.s1?.agents.main
+    expect(main?.attention).toBeUndefined()
+    expect(main?.activity).toBe('working')
+    expect(main?.currentTool?.name).toBe('Bash')
+  })
+
+  it('ignores a clear for an unknown agent or session (202, no ghost created)', async () => {
+    await askPermission()
+    const before = await state()
+    const res = await post([
+      makeEvent({ kind: 'attention.clear', agentId: 'ghost', ts: at(3) }),
+      makeEvent({ kind: 'attention.clear', sessionId: 'nope', ts: at(3) }),
+    ])
+    expect(res.statusCode).toBe(202)
+    expect(IngestResponse.parse(res.json()).accepted).toBe(2)
+    const after = await state()
+    expect(after).toEqual(before)
+    expect(after.sessions.s1?.agents.ghost).toBeUndefined()
+    expect(after.sessions.nope).toBeUndefined()
+  })
+
+  it('snapshot.recent with attention.clear in it still parses and keeps the item', async () => {
+    await askPermission()
+    await post(makeEvent({ id: 'clear-1', kind: 'attention.clear', ts: at(3) }))
+    const wire = JSON.parse(JSON.stringify(app.hub.snapshot()))
+    const snap = SnapshotMessage.parse(wire)
+    expect(snap.recent.map((e) => e.kind)).toEqual(['tool.start', 'attention', 'attention.clear'])
+    expect(snap.recent.at(-1)?.id).toBe('clear-1')
+    expect(snap.state.sessions.s1?.agents.main?.attention).toBeUndefined()
   })
 })
 
