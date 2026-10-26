@@ -1,8 +1,8 @@
 /*
  * 팀 구성(기획서 3절 "팀 구역") — 서브에이전트 종류(agentType) → 팀. PixiJS·React 비의존 순수 데이터.
  *
- * 팀 매핑은 이 파일 한 곳에만 데이터로 둔다. 나중에 "직원 설정" 화면이 생기면
- * TeamConfig 를 사용자 값으로 만들어 Director 에 넘기면 된다(코드 수정 없이).
+ * 기본 팀 매핑은 이 파일 한 곳에만 데이터로 둔다. "직원 설정" 화면에서 사용자가 정한 팀은
+ * employeeSettings.toTeamConfig 가 이 기본값 위에 덮어써 Director 에 넘긴다.
  */
 
 /** 팀 ID. 화면 배치 순서(layout.TEAM_ZONES)와 무관한 이름 */

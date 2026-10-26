@@ -1,5 +1,6 @@
 import type { OfficeEvent } from '@claude-office/shared'
 import { Application, Assets, Container, Spritesheet, type Texture, TextureSource } from 'pixi.js'
+import { getEmployeeSettings, subscribeEmployeeSettings } from '../employeeSettings'
 import {
   effectiveSessionId,
   type OfficeStore,
@@ -63,7 +64,10 @@ export class OfficeScene {
   constructor(host: HTMLElement, store: OfficeStore) {
     this.host = host
     this.store = store
-    this.director = new Director({ now: () => store.serverNow() })
+    this.director = new Director({
+      now: () => store.serverNow(),
+      employees: getEmployeeSettings,
+    })
   }
 
   async init(): Promise<void> {
@@ -128,6 +132,8 @@ export class OfficeScene {
     }
     this.cleanups.push(this.store.addSceneListener(listener))
     this.cleanups.push(this.store.subscribe(() => this.syncHighlight()))
+    // 직원 설정(이름·팀·색)이 바뀌면 층 전환과 같은 경로로 상태대로 다시 그린다 — 팀을 바꾼 팀원은 즉시 새 팀 책상에
+    this.cleanups.push(subscribeEmployeeSettings(() => this.resync(this.store.getState())))
     this.resync(this.store.getState())
 
     // 탭이 다시 보이면 상태로 즉시 맞춘다(숨겨진 동안 rAF 가 멈춰 애니메이션이 밀려 있다)

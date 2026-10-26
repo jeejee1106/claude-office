@@ -56,6 +56,11 @@ export type CharacterCommand =
   /** 머리 위 표시(큐를 거치지 않고 즉시). durationMs 없으면 다음 mark 까지 유지 */
   | (Base & { type: 'mark'; mark: Mark | null; durationMs: number | null })
   /**
+   * 이름표 바꾸기(큐를 거치지 않고 즉시). 같은 이름의 사람이 들어오거나 나가 번호("이름 2")가
+   * 달라질 때 — 이름표는 상태로 정해지는 표시 이름(employeeSettings.displayNames)을 따른다.
+   */
+  | (Base & { type: 'label'; label: string })
+  /**
    * 문으로 걸어가서 퇴장(제거). style 이 있으면 짧은 준비 동작(pack: 짐 챙기기 → 가방 들고,
    * report: 팀장 책상 쪽을 보고 보고 → 3초 머묾) 후 정해진 시간에 걸어 나간다
    * — pack 은 LEAVE_MAX_MS, report 는 LEAVE_REPORT_MAX_MS 안.

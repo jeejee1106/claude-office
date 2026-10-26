@@ -146,10 +146,14 @@ export class Character {
     this.view.setHighlight(on)
   }
 
-  /** director 명령 수신. mark 는 즉시, 나머지는 큐로 */
+  /** director 명령 수신. mark·label 은 즉시, 나머지는 큐로 */
   enqueue(cmd: CharacterCommand): void {
     if (cmd.type === 'mark') {
       this.applyMark(cmd.mark, cmd.durationMs)
+      return
+    }
+    if (cmd.type === 'label') {
+      this.view.setLabel(cmd.label)
       return
     }
     if (cmd.type === 'place' || cmd.type === 'remove') {

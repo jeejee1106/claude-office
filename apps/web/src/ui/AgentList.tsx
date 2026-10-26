@@ -1,7 +1,9 @@
 import { type AgentState, isAsleep, MAIN_AGENT_ID } from '@claude-office/shared'
 import { useEffect, useState } from 'react'
+import { baseName, displayNames } from '../employeeSettings'
 import { type Lang, t } from '../i18n'
 import { effectiveSessionId } from '../store/officeStore'
+import { useEmployees } from './EmployeeSettings'
 import { useLang } from './LangToggle'
 import { useOfficeStore, useStoreSelector } from './useStore'
 
@@ -27,6 +29,8 @@ export function AgentList() {
       )
     : []
   const now = store.serverNow()
+  const employees = useEmployees()
+  const names = displayNames(session, employees)
 
   return (
     <section className="panel">
@@ -45,7 +49,7 @@ export function AgentList() {
               >
                 <span className={`dot dot-${asleep ? 'sleep' : a.activity}`} />
                 <span className="agent-name">
-                  {a.id === MAIN_AGENT_ID ? 'main' : (a.type ?? a.id)}
+                  {names.get(a.id) ?? baseName(a.id, a.type, employees)}
                 </span>
                 <span className="agent-state">
                   {asleep ? t('asleep', lang) : activityLabel(a.activity, lang)}
