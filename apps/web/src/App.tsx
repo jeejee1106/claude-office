@@ -3,6 +3,7 @@ import { OfficeSocket } from './net/socket'
 import { createOfficeStore } from './store/officeStore'
 import { AgentList } from './ui/AgentList'
 import { ConnectionBadge } from './ui/ConnectionBadge'
+import { EmployeeSettingsButton } from './ui/EmployeeSettings'
 import { FloorTabs } from './ui/FloorTabs'
 import { LangToggle } from './ui/LangToggle'
 import { OfficeView } from './ui/OfficeView'
@@ -30,6 +31,7 @@ export function App() {
           <FloorTabs />
           <SessionPicker />
           <LangToggle />
+          <EmployeeSettingsButton />
           <ConnectionBadge />
         </header>
         <main className="layout">

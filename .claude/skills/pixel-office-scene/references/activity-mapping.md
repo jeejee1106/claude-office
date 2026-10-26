@@ -55,9 +55,9 @@
 
 | kind | 행동 | 대사 |
 | --- | --- | --- |
-| `session.start` | 사무실 조명 켜짐, 메인 캐릭터가 문으로 등장해 자기 책상으로 | `sessionStart` "출근했습니다!" (등장할 때) |
+| `session.start` | 사무실 조명 켜짐, 메인 캐릭터가 문으로 등장해 자기 책상으로. (그 밖의 이벤트라도 보고 있는 세션이 끝나지 않았는데 조명이 꺼져 있으면 켠다 — 서버 재시작 등으로 `session.start` 없이 세션이 생긴 경우. 끄는 쪽은 `session.end` 만) | `sessionStart` "출근했습니다!" (등장할 때) |
 | `prompt.submit` | 자리에서 일어남 `idle_stand`(brief: 1.5초 뒤 자기 책상 `idle_sit`, soft) + 머리 위 "!" 0.8초 | `promptSubmit` "네, 알겠습니다!" |
-| `agent.spawn` | 새 캐릭터 문에서 등장(`spawning`) → 자기 팀 책상의 빈자리(`agentType` → 팀: `apps/web/src/scene/teams.ts`), 팀 책상이 다 차면 `commonTable` | `subSpawn` "부르셨어요?" (등장할 때) |
+| `agent.spawn` | 새 캐릭터 문에서 등장(`spawning`) → 자기 팀 책상의 빈자리(`agentType` → 팀: `apps/web/src/scene/teams.ts` 기본값 위에 직원 설정의 팀을 덮어씀 — `employeeSettings.toTeamConfig`), 팀 책상이 다 차면 `commonTable` | `subSpawn` "부르셨어요?" (등장할 때) |
 | `agent.finish` | 팀장 책상 쪽을 보고 `report` 0.4초 → 그 자리에 `idle_stand` 3초 머묾 → 문으로 퇴장 | `subFinish` "퇴근하겠습니다!" (퇴장 내내, 약 4.8초) |
 | `turn.end` | 휴게실에서 쉼 — 이벤트 id 해시(`pickLoungeRest`, 접두사 `lounge:`)로 셋 중 하나: 커피머신 `coffee` 에서 `idle_drink` + 김 나는 컵(`steam`) / 소파 `sofaSit` 에서 `sofa_sit` / 소파 `sofaLie` 에서 `sofa_lie`. 고른 소파 자리가 없으면(휴게실 행의 소파 규칙) 커피. 김은 커피일 때만 | `turnEnd` "휴~" (도착할 때, 셋 공통) |
 | `attention` | 해당 캐릭터 `raise_hand` + 깜빡이는 "?" (사용자 확인 필요) | `attention` "확인 부탁드려요!" |
@@ -69,6 +69,14 @@
 | (모르는 kind) | 자기 책상 `idle_sit` (soft). throw 하지 않는다. 소켓 파서는 계약 밖 kind 를 콘솔 경고 후 버린다 | — |
 
 연속 에러 수는 상태(계약)에 없으므로 web 의 director 가 이벤트 열로 센다(캐릭터별, ok `tool.end` 에서 0으로, 다시 배치(`syncAll`)하면 0부터).
+
+### 직원 설정 (기획서 4절 "직원 설정", `apps/web/src/employeeSettings.ts`)
+
+- 저장: localStorage `claude-office.employees` = `{ v: 1, boss: { name?, variant? }, types: { [agentType]: { name?, team?, variant? } } }`. 버전이 다르거나 깨진 값이면 기본값, 틀린 칸만 버린다. 빈 칸은 기본 규칙.
+- 이름표(`spawn`/`place` 의 `label`)·직원 목록·타임라인 "who" 는 모두 `displayNames(session, settings)`: 정한 이름 → 없으면 `main` / 종류 이름 / id 앞 8자. 지금 사무실에 있는(gone 아닌) 사람 중 같은 이름이 2명 이상이면 상태의 에이전트 순서대로 두 번째부터 "이름 2". 퇴장한 사람은 번호 없이. 번호가 바뀌면(앞사람 퇴장 등) director 가 즉시 명령 `label` 로 이름표를 바꾼다.
+- 색 변형: 정한 값(0..7, 팀장도 고를 수 있음) → 없으면 `variant.ts` 규칙(main=0, `FIXED_VARIANTS`, 해시).
+- 팀: 정한 팀 → 없으면 `teams.ts`. 팀장은 팀 없음.
+- 설정이 바뀌면 씬은 층 전환과 같은 `resync`(`syncAll`)로 상태대로 다시 그린다 — 팀을 바꾼 팀원은 즉시 새 팀 책상에 앉은 채로 나타난다(걸어가지 않음). 대사 선택(이벤트 id 해시)은 이름과 무관.
 
 ### 말풍선·대사 규칙 (기획서 6절)
 

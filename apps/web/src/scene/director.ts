@@ -6,6 +6,15 @@ import {
   type OfficeState,
   type SessionState,
 } from '@claude-office/shared'
+import {
+  baseName,
+  DEFAULT_EMPLOYEE_SETTINGS,
+  displayNameOf,
+  displayNames,
+  type EmployeeSettings,
+  toTeamConfig,
+  variantOf,
+} from '../employeeSettings'
 import { getLang, type Lang, type LineKey, pickLine } from '../i18n'
 import {
   type AnimName,
@@ -27,8 +36,7 @@ import {
 import { LEAVE_REPORT_MAX_MS } from './Character'
 import type { CharacterCommand, DirectorOutput } from './commands'
 import { SPOTS, type SpotId, teamDesks } from './layout'
-import { DEFAULT_TEAM_CONFIG, type TeamConfig, teamOf } from './teams'
-import { variantFor } from './variant'
+import { type TeamConfig, teamOf } from './teams'
 
 /*
  * OfficeEvent → 캐릭터 명령 변환기. PixiJS 비의존 순수 로직(시계만 주입).
@@ -47,7 +55,12 @@ export interface DirectorOptions {
   now?: () => number
   /** 대사 언어(기본: 사용자가 고른 언어) */
   lang?: () => Lang
-  /** 팀 구성(기본: teams.ts 의 DEFAULT_TEAM_CONFIG). 나중에 "직원 설정" 화면이 넘긴다 */
+  /**
+   * 직원 설정(이름·팀·색, 기획서 4절). 기본: 빈 설정 = 기본 규칙(테스트가 저장소에 휘둘리지 않게).
+   * 씬은 employeeSettings.getEmployeeSettings 를 넘기고, 설정이 바뀌면 syncAll 로 다시 그린다.
+   */
+  employees?: () => EmployeeSettings
+  /** 팀 구성(기본: employees 의 toTeamConfig = teams.ts 기본 + 사용자가 정한 팀) */
   teams?: () => TeamConfig
 }
 
@@ -94,11 +107,14 @@ export class Director {
   private boardWritten = false
   private readonly lang: () => Lang
   private readonly teams: () => TeamConfig
+  private readonly employees: () => EmployeeSettings
 
   constructor(opts: DirectorOptions = {}) {
     this.now = opts.now ?? Date.now
     this.lang = opts.lang ?? getLang
-    this.teams = opts.teams ?? (() => DEFAULT_TEAM_CONFIG)
+    const employees = opts.employees ?? (() => DEFAULT_EMPLOYEE_SETTINGS)
+    this.employees = employees
+    this.teams = opts.teams ?? (() => toTeamConfig(employees()))
   }
 
   serversBusyNow(): boolean {
@@ -150,7 +166,7 @@ export class Director {
     out.push({ type: 'board', written: this.boardWritten, cause: 'sync' })
     agents.sort((a, b) => (a.id === MAIN_AGENT_ID ? -1 : b.id === MAIN_AGENT_ID ? 1 : 0))
     for (const agent of agents) {
-      const info = this.createChar(agent.id, agent.type)
+      const info = this.createChar(agent.id, agent.type, session)
       const p = this.placementFor(agent)
       const spot = this.resolve(info, p.spot)
       const slot = this.occupy(info, spot)
@@ -226,6 +242,7 @@ export class Director {
       }
       this.release(info)
       this.updateServers(out, cause)
+      this.relabel(session, out, cause)
       return out
     }
 
@@ -233,6 +250,14 @@ export class Director {
     // 상태상 퇴장한 에이전트(늦게 도착한 이벤트)는 다시 만들지 않는다.
     if (agent?.activity === 'gone') return out
     if (session?.endedAt !== undefined) return out
+
+    // 열린 세션에 활동이 있는데 불이 꺼져 있으면 켠다. session.start 없이 세션이 생긴 경우
+    // (서버 재시작으로 일반 이벤트부터 다시 쌓임 등) syncAll 이 "세션 없음"으로 끈 조명이 그대로 남지 않게.
+    // 끄는 쪽은 그대로 session.end("마지막 사람이 나가면")만.
+    if (session !== undefined && !this.lights) {
+      this.lights = true
+      out.push({ type: 'lights', on: true, cause })
+    }
 
     if (act.motion === 'resume') {
       // attention.clear: 정리용 이벤트라 캐릭터를 새로 만들지 않는다(상태도 유령 에이전트를 만들지 않음)
@@ -244,7 +269,7 @@ export class Director {
     let info = this.chars.get(e.agentId)
     if (info === undefined) {
       const type = e.kind === 'agent.spawn' ? e.agentType : agent?.type
-      info = this.createChar(e.agentId, type)
+      info = this.createChar(e.agentId, type, session)
       out.push({
         type: 'spawn',
         agentId: info.agentId,
@@ -357,7 +382,23 @@ export class Director {
       if (ms === null) info.persistentMark = effective.mark
     }
     this.updateServers(out, cause)
+    this.relabel(session, out, cause)
     return out
+  }
+
+  /**
+   * 같은 이름의 사람이 들어오거나 나가 번호("이름 2")가 달라졌으면 이름표를 바꾼다.
+   * 이름표는 상태로 정해지는 displayNames 를 따른다(직원 목록·타임라인과 같은 이름).
+   */
+  private relabel(session: SessionState | undefined, out: DirectorOutput[], cause: string): void {
+    if (session === undefined) return
+    const names = displayNames(session, this.employees())
+    for (const info of this.chars.values()) {
+      const label = names.get(info.agentId)
+      if (label === undefined || label === info.label) continue
+      info.label = label
+      out.push({ type: 'label', agentId: info.agentId, cause, label })
+    }
   }
 
   /**
@@ -455,11 +496,19 @@ export class Director {
     return { spot: 'ownDesk', anim: 'idle_sit', bubble: null, mark: null }
   }
 
-  private createChar(agentId: string, agentType: string | undefined): CharInfo {
+  private createChar(
+    agentId: string,
+    agentType: string | undefined,
+    session: SessionState | undefined,
+  ): CharInfo {
+    const emp = this.employees()
     const info: CharInfo = {
       agentId,
-      variant: variantFor(agentId, agentType),
-      label: agentId === MAIN_AGENT_ID ? 'main' : (agentType ?? agentId.slice(0, 8)),
+      variant: variantOf(agentId, agentType, emp),
+      label:
+        session?.agents[agentId] !== undefined
+          ? displayNameOf(agentId, session, emp)
+          : baseName(agentId, agentType, emp),
       desk: this.assignDesk(agentId, agentType),
       spot: null,
       slot: 0,
