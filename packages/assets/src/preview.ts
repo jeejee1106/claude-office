@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { encodePng, PixelImage } from './canvas'
 import { packOffice } from './officeSheet'
 import { PREVIEW_PATH } from './paths'
+import { writePartnerPreview } from './previewPartners'
 import { buildCharacterSheet } from './sheet'
 import { ACTIONS, ALL_DIRS, FRAME_H, FRAME_W } from './sprites/character'
 
@@ -117,3 +118,4 @@ if (!only) {
 
 writeFileSync(out, encodePng(final))
 console.log(`preview: ${final.width}x${final.height}px (scale ${scale}) -> ${out}`)
+if (!only) console.log(writePartnerPreview())

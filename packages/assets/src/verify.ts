@@ -3,10 +3,12 @@ import { join, relative, resolve } from 'node:path'
 import { decodePng, PixelImage } from './canvas'
 import type { OfficeAtlas } from './officeSheet'
 import { VARIANT_COUNT } from './palette'
+import { type PartnerAtlas, packPartners, petAnimDirs } from './partnerSheet'
 import { OUTPUT_DIR, REPO_ROOT } from './paths'
 import { DOWN_ONLY_ACTIONS, type PixiAtlas } from './sheet'
 import { ALL_DIRS } from './sprites/character'
 import { buildOfficeFrames, OFFICE_ANIMATIONS } from './sprites/office'
+import { PET_ANIMS, PET_KINDS } from './sprites/partner'
 import { offPalettePixels } from './validate'
 
 /*
@@ -140,15 +142,49 @@ for (const [key, names] of Object.entries(OFFICE_ANIMATIONS)) {
 for (const key of Object.keys(officeAtlas.animations))
   if (!(key in OFFICE_ANIMATIONS)) errors.push(`office: stale animation ${key} (run build)`)
 
-// 씬 코드가 이름으로 부르는 furn_/tile_/ui_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
+// ---------------------------------------------------------------------------
+// partners 시트: 디스크 산출물이 생성 스크립트와 같은지 + 5종 × 행동 × 방향이 다 있는지
+// ---------------------------------------------------------------------------
+const petAtlas = JSON.parse(
+  readFileSync(resolve(OUTPUT_DIR, 'partners.json'), 'utf8'),
+) as PartnerAtlas
+const petSheet = decodePng(readFileSync(resolve(OUTPUT_DIR, petAtlas.meta.image)))
+const petExpected = packPartners()
+if (!petSheet.equals(petExpected.image))
+  errors.push('partners: PNG differs from the script (run build)')
+if (JSON.stringify(petAtlas) !== JSON.stringify(petExpected.atlas))
+  errors.push('partners: JSON differs from the script (run build)')
+const petBad = offPalettePixels(petSheet)
+if (petBad.length) errors.push(`partners: off-palette pixels: ${petBad.join(', ')}`)
+let petChecked = 0
+for (const kind of PET_KINDS)
+  for (const a of PET_ANIMS)
+    for (const dir of petAnimDirs(a)) {
+      const key = `pet_${kind}_${a.name}_${dir}`
+      const names = petAtlas.animations[key]
+      if (!names?.length) errors.push(`partners: missing animation ${key}`)
+      for (const n of names ?? []) {
+        if (!petAtlas.frames[n]) errors.push(`partners: ${key} -> missing ${n}`)
+        petChecked++
+      }
+    }
+
+// 씬 코드가 이름으로 부르는 furn_/tile_/ui_/pet_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
 const warnings: string[] = []
-const known = new Set([...Object.keys(officeAtlas.frames), ...Object.keys(atlas.frames)])
+const known = new Set([
+  ...Object.keys(officeAtlas.frames),
+  ...Object.keys(atlas.frames),
+  ...Object.keys(petAtlas.frames),
+  ...Object.keys(petAtlas.animations),
+])
 function scan(dir: string) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name)
     if (e.isDirectory()) scan(p)
     else if (/\.(ts|tsx)$/.test(e.name))
-      for (const m of readFileSync(p, 'utf8').matchAll(/['"`]((?:furn|tile|ui)_[a-z0-9_]+)['"`]/g))
+      for (const m of readFileSync(p, 'utf8').matchAll(
+        /['"`]((?:furn|tile|ui|pet)_[a-z0-9_]+)['"`]/g,
+      ))
         if (!known.has(m[1] as string))
           warnings.push(`${relative(REPO_ROOT, p)}: '${m[1]}' not in any sheet`)
   }
@@ -165,5 +201,6 @@ console.log(
   `verify OK: ${required.length} animations (${required.join(', ')}) x ${ALL_DIRS.length} dirs x ` +
     `${sceneVariants} variants, ${checked} frames checked; office ${expected.length} frames + ` +
     `${Object.keys(OFFICE_ANIMATIONS).length} animations match the script; ` +
+    `partners ${PET_KINDS.length} kinds, ${petChecked} frames match the script; ` +
     '0 off-palette pixels',
 )

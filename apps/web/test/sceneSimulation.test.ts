@@ -105,6 +105,14 @@ function simulate(frameMs: number): SimResult {
         visibleAtLightsOff = roster.visibleCount
       }
     },
+    // 파트너 몬스터도 같이 돈다(프레임당 비용 예산에 포함)
+    () => ({
+      setPosition() {},
+      setAnimation() {},
+      setAlpha() {},
+      tick() {},
+      destroy() {},
+    }),
   )
   const store = createOfficeStore()
   let sessionId: string | null = null

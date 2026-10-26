@@ -1,6 +1,7 @@
 import { Character } from './Character'
 import { type DirectorOutput, isCharacterCommand, type SceneCommand } from './commands'
-import type { CharacterView } from './render/types'
+import { Partner, type PartnerKind } from './partner'
+import type { CharacterView, PartnerView } from './render/types'
 
 /*
  * 화면 위 캐릭터 목록(PixiJS 비의존). director 명령을 Character 에 나눠 주고 매 프레임 진행시킨다.
@@ -16,12 +17,17 @@ export class Roster {
   departing: Character[] = []
   private highlight: string | null = null
 
+  /** 파트너 몬스터 뷰(없으면 파트너를 만들지 않는다 — 옛 테스트) */
+  private readonly createPartner: ((kind: PartnerKind) => PartnerView) | null
+
   constructor(
     createView: (variant: number) => CharacterView,
     onScene: (cmd: SceneCommand) => void,
+    createPartner: ((kind: PartnerKind) => PartnerView) | null = null,
   ) {
     this.createView = createView
     this.onScene = onScene
+    this.createPartner = createPartner
   }
 
   /** 조명 끄기를 기다리는 중인가(테스트용) */
@@ -58,6 +64,9 @@ export class Roster {
           if (ch === undefined) {
             ch = new Character(cmd.agentId, this.createView(cmd.variant))
             ch.setHighlight(this.highlight === cmd.agentId)
+            if (cmd.partner !== undefined && this.createPartner !== null) {
+              ch.attachPartner(new Partner(cmd.partner, this.createPartner(cmd.partner)))
+            }
             this.chars.set(cmd.agentId, ch)
           }
           ch.enqueue(cmd)

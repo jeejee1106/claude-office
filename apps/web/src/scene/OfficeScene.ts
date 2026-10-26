@@ -23,6 +23,7 @@ import {
   parseSignMeta,
 } from './render/officeSheet'
 import { type OfficeAtlas, PlaceholderRenderer } from './render/PlaceholderRenderer'
+import { missingPartnerKeys, PARTNER_ATLAS_URL, type PartnerAtlas } from './render/partnerSheet'
 import type { SceneRenderer } from './render/types'
 import { Roster } from './roster'
 import { routeSceneEvent } from './sceneRouting'
@@ -81,7 +82,11 @@ export class OfficeScene {
       backgroundColor: 0x1b1f3b,
     })
     // 캐릭터 아틀라스: 실패해도 null → 플레이스홀더 캐릭터로 그린다(화면이 비지 않게)
-    const [atlas, office] = await Promise.all([loadCharacterAtlas(), loadOfficeAtlas()])
+    const [atlas, office, partners] = await Promise.all([
+      loadCharacterAtlas(),
+      loadOfficeAtlas(),
+      loadPartnerAtlas(),
+    ])
     if (this.destroyed) {
       app.destroy(true, { children: true })
       return
@@ -107,6 +112,7 @@ export class OfficeScene {
       overlay,
       atlas,
       office,
+      partners,
     )
     this.renderer = renderer
     renderer.drawRoom(PROPS)
@@ -117,6 +123,7 @@ export class OfficeScene {
         else if (cmd.type === 'servers') renderer.setServerBusy(cmd.busy)
         else renderer.setBoardWritten(cmd.written)
       },
+      (kind) => renderer.createPartner(kind),
     )
 
     // 리사이즈: 정수 배율
@@ -233,8 +240,32 @@ function createRenderer(
   overlay: HTMLElement,
   atlas: CharacterAtlas<Texture> | null,
   office: OfficeAtlas<Texture> | null,
+  partners: PartnerAtlas<Texture> | null,
 ): SceneRenderer {
-  return new PlaceholderRenderer(layers, overlay, atlas, office)
+  return new PlaceholderRenderer(layers, overlay, atlas, office, partners)
+}
+
+/** partners.json(+png) 로드 — 파트너 몬스터. 실패하면 경고만 남기고 null(색 덩어리로 그린다) */
+async function loadPartnerAtlas(): Promise<PartnerAtlas<Texture> | null> {
+  const url = `${import.meta.env.BASE_URL}${PARTNER_ATLAS_URL}`
+  try {
+    const sheet: unknown = await Assets.load(url)
+    if (!(sheet instanceof Spritesheet) || Object.keys(sheet.animations).length === 0) {
+      console.warn(`[claude-office] ${url} 이 파트너 시트 형식이 아님 — 색 덩어리로 그립니다.`)
+      return null
+    }
+    sheet.textureSource.scaleMode = 'nearest'
+    const missing = missingPartnerKeys(sheet.animations)
+    if (missing.length > 0) {
+      console.warn(
+        `[claude-office] 파트너 시트에 애니메이션 ${missing.length}개 없음(예: ${missing[0]}) — 그 동작만 색 덩어리로 그립니다.`,
+      )
+    }
+    return { animations: sheet.animations, frameMs: parseFrameMs(sheet.data.meta) }
+  } catch (err) {
+    console.warn(`[claude-office] 파트너 시트 로드 실패(${url}) — 색 덩어리로 그립니다.`, err)
+    return null
+  }
 }
 
 /** office.json(+png) 로드 — 층 전체 바닥·벽·가구. 실패하면 경고만 남기고 null(코드로 그린다) */

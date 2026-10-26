@@ -36,6 +36,7 @@ import {
 import { LEAVE_REPORT_MAX_MS } from './Character'
 import type { CharacterCommand, DirectorOutput } from './commands'
 import { SPOTS, type SpotId, teamDesks } from './layout'
+import { type PartnerKind, type PartnerReaction, partnerKindOf } from './partner'
 import { type TeamConfig, teamOf } from './teams'
 
 /*
@@ -71,6 +72,8 @@ interface CharInfo {
   agentId: string
   variant: number
   label: string
+  /** 파트너 몬스터 종류(팀장 boss, 팀원 자기 팀 — 책상 배정과 같은 팀 규칙) */
+  partner: PartnerKind
   /** 자기 책상 */
   desk: SpotId
   /** 현재(마지막으로 명령한) 스팟과 슬롯 */
@@ -179,6 +182,7 @@ export class Director {
         cause: 'sync',
         variant: info.variant,
         label: info.label,
+        partner: info.partner,
         spot,
         slot,
         anim: p.anim,
@@ -276,6 +280,7 @@ export class Director {
         cause,
         variant: info.variant,
         label: info.label,
+        partner: info.partner,
         // 등장 대사(출근·"부르셨어요?")는 문에서 들어올 때
         say: act.motion === 'enter' ? this.line(act.line, cause) : null,
       })
@@ -341,8 +346,12 @@ export class Director {
               say: this.line(r.line, cause),
               interruptible: true,
             })
+            // 파트너 놀람(즉시 — 주인이 멈칫하는 동안)
+            out.push(this.partnerCmd(info, 'surprised', cause))
           } else {
             info.consecutiveErrors = 0
+            // 파트너 깡충(쿨다운은 Partner 가 — 도구가 몇 초에 여러 번 끝나도 한 번)
+            out.push(this.partnerCmd(info, 'hop', cause))
           }
         }
         out.push(
@@ -505,6 +514,7 @@ export class Director {
     const info: CharInfo = {
       agentId,
       variant: variantOf(agentId, agentType, emp),
+      partner: partnerKindOf(agentId, agentType, this.teams()),
       label:
         session?.agents[agentId] !== undefined
           ? displayNameOf(agentId, session, emp)
@@ -653,5 +663,9 @@ export class Director {
     cause: string,
   ): CharacterCommand {
     return { type: 'mark', agentId: info.agentId, cause, mark, durationMs }
+  }
+
+  private partnerCmd(info: CharInfo, reaction: PartnerReaction, cause: string): CharacterCommand {
+    return { type: 'partner', agentId: info.agentId, cause, reaction }
   }
 }
