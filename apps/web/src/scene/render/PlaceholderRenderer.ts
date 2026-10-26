@@ -14,6 +14,7 @@ import {
   SOFA_SORT_Y,
   TILE,
 } from '../layout'
+import type { PartnerAnim, PartnerKind } from '../partner'
 import type { TeamId } from '../teams'
 import { animKey, type CharacterAtlas, pickFrame, resolveAnim, SOFA_POSES } from './characterSheet'
 import {
@@ -37,7 +38,8 @@ import {
   type ViewSample,
   wallDecor,
 } from './officeSheet'
-import type { CharacterView, SceneRenderer } from './types'
+import { type PartnerAtlas, partnerAnimKey, pickPartnerFrame } from './partnerSheet'
+import type { CharacterView, PartnerView, SceneRenderer } from './types'
 
 /*
  * 씬 렌더러. 층 전체(모든 방 바닥·벽·칸막이·출입구·가구)는 office 아틀라스(office.json)가 있으면
@@ -196,6 +198,7 @@ export class PlaceholderRenderer implements SceneRenderer {
   /** 파쇄기 작동 프레임이 있으면 캐릭터의 코드 종이 조각 이펙트를 끈다(프레임 안에 조각이 있음) */
   private shredsInProp = false
   private readonly views = new Set<PlaceholderCharacterView>()
+  private readonly partnerViews = new Set<PartnerSpriteView>()
   /** 캐릭터 층에 깊이 정렬로 섞여 그려지는 가구(팀장 책상·직원 의자) */
   private readonly frontProps: Container[] = []
   private readonly signs: SignLabel[] = []
@@ -203,18 +206,24 @@ export class PlaceholderRenderer implements SceneRenderer {
 
   private readonly atlas: CharacterAtlas<Texture> | null
   private readonly office: OfficeAtlas<Texture> | null
+  private readonly partners: PartnerAtlas<Texture> | null
 
-  /** atlas 가 null 이면(로드 실패) 캐릭터도 코드로 그린 도형으로 그린다. office 도 같다(업무 공간 가구) */
+  /**
+   * atlas 가 null 이면(로드 실패) 캐릭터도 코드로 그린 도형으로 그린다. office 도 같다(업무 공간 가구).
+   * partners 가 null 이면 파트너 몬스터는 팀 색의 작은 덩어리로 그린다.
+   */
   constructor(
     layers: PlaceholderLayers,
     domOverlay: HTMLElement,
     atlas: CharacterAtlas<Texture> | null = null,
     office: OfficeAtlas<Texture> | null = null,
+    partners: PartnerAtlas<Texture> | null = null,
   ) {
     this.layers = layers
     this.dom = domOverlay
     this.atlas = atlas
     this.office = office
+    this.partners = partners
     if (!warned && atlas === null) {
       warned = true
       console.warn(
@@ -386,6 +395,14 @@ export class PlaceholderRenderer implements SceneRenderer {
       default:
         break
     }
+  }
+
+  createPartner(kind: PartnerKind): PartnerView {
+    const v = new PartnerSpriteView(kind, this.layers.characters, this.partners, () => {
+      this.partnerViews.delete(v)
+    })
+    this.partnerViews.add(v)
+    return v
   }
 
   createCharacter(variant: number): CharacterView {
@@ -603,6 +620,7 @@ export class PlaceholderRenderer implements SceneRenderer {
   destroy(): void {
     this.unsubLang()
     for (const v of [...this.views]) v.destroy()
+    for (const v of [...this.partnerViews]) v.destroy()
     for (const c of this.frontProps.splice(0)) c.destroy()
     this.signs.length = 0
     this.codeRacks = []
@@ -1404,5 +1422,155 @@ class PlaceholderCharacterView implements CharacterView {
       default:
         break
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 파트너 몬스터
+// ---------------------------------------------------------------------------
+
+/** 시트가 없을 때 파트너 덩어리 색(pixel-artist 요약 "5종" 몸 색과 같은 계열) */
+const PARTNER_COLORS: Readonly<Record<PartnerKind, number>> = {
+  research: 0x45bfb0,
+  planning: 0xa283e0,
+  design: 0xf59ab5,
+  dev: 0x4f8ff0,
+  boss: 0xe8735a,
+}
+/** 앉음·잠 자세의 머리 위 Zzz 높이(발끝 기준, pixel-artist 권장 약 −14px) */
+const PARTNER_ZZZ_TOP = -18
+const PARTNER_ZZZ_MS = 400
+
+let warnedPartnerSheet = false
+
+class PartnerSpriteView implements PartnerView {
+  private readonly root = new Container()
+  private readonly sprite = new Sprite()
+  private readonly body = new Graphics()
+  private readonly zzz = new Graphics()
+  private readonly kind: PartnerKind
+  private readonly atlas: PartnerAtlas<Texture> | null
+  private readonly onDestroy: () => void
+  private anim: PartnerAnim = 'idle'
+  private dir: Dir = 'down'
+  private elapsed = 0
+  private zStep = -1
+  private px = Number.NaN
+  private py = Number.NaN
+  private destroyed = false
+
+  constructor(
+    kind: PartnerKind,
+    layer: Container,
+    atlas: PartnerAtlas<Texture> | null,
+    onDestroy: () => void,
+  ) {
+    this.kind = kind
+    this.atlas = atlas
+    this.onDestroy = onDestroy
+    // 발끝 중앙 앵커 고정(텍스처 교체 때 defaultAnchor 를 다시 읽지 않는다)
+    this.sprite.anchor.set(0.5, 1)
+    this.root.addChild(this.body, this.sprite, this.zzz)
+    this.root.visible = false // 첫 위치를 받기 전에는 (0,0) 에 보이지 않게
+    layer.addChild(this.root)
+    if (atlas === null && !warnedPartnerSheet) {
+      warnedPartnerSheet = true
+      console.warn('[claude-office] 파트너 시트 없음 — 파트너를 작은 색 덩어리로 그립니다.')
+    }
+  }
+
+  setPosition(x: number, y: number): void {
+    const rx = Math.round(x)
+    const ry = Math.round(y)
+    if (rx === this.px && ry === this.py) return
+    this.px = rx
+    this.py = ry
+    this.root.position.set(rx, ry)
+    this.root.zIndex = ry // 발끝 y 로 캐릭터·가구와 깊이 정렬
+    this.root.visible = true
+  }
+
+  setAnimation(anim: PartnerAnim, dir: Dir): void {
+    this.anim = anim
+    this.dir = dir
+    this.elapsed = 0
+    this.zStep = -1
+    this.redraw()
+  }
+
+  setAlpha(a: number): void {
+    this.root.alpha = Math.round(a * 4) / 4
+  }
+
+  tick(dtMs: number): void {
+    this.elapsed += dtMs
+    if (this.atlas !== null) this.updateSprite()
+    if (this.anim === 'sleep') {
+      const s = Math.floor(this.elapsed / PARTNER_ZZZ_MS) % 4
+      if (s !== this.zStep) {
+        this.zStep = s
+        this.drawZzz(s)
+      }
+    }
+  }
+
+  destroy(): void {
+    if (this.destroyed) return
+    this.destroyed = true
+    this.root.destroy({ children: true })
+    this.onDestroy()
+  }
+
+  private redraw(): void {
+    this.zzz.clear()
+    if (this.anim === 'sleep') this.drawZzz(0)
+    if (this.atlas !== null && this.updateSprite()) {
+      this.body.clear()
+      this.body.visible = false
+      this.sprite.visible = true
+      return
+    }
+    this.sprite.visible = false
+    this.body.visible = true
+    this.drawBody()
+  }
+
+  /** 시트 프레임을 고른다. 키가 없으면 false(덩어리로 그린다) */
+  private updateSprite(): boolean {
+    if (this.atlas === null) return false
+    const tex = pickPartnerFrame(this.atlas, this.kind, this.anim, this.dir, this.elapsed)
+    if (tex === null) {
+      const key = partnerAnimKey(this.kind, this.anim, this.dir)
+      if (!warnedKeys.has(key)) {
+        warnedKeys.add(key)
+        console.warn(`[claude-office] 파트너 시트에 ${key} 없음 — 색 덩어리로 그립니다.`)
+      }
+      return false
+    }
+    if (this.sprite.texture !== tex) this.sprite.texture = tex
+    return true
+  }
+
+  /** 시트가 없을 때: 원점 = 발끝 중앙, 8×(앉음 6 / 섬 8) 덩어리 + 눈 */
+  private drawBody(): void {
+    const g = this.body
+    g.clear()
+    const low = this.anim === 'sit' || this.anim === 'sleep'
+    const h = low ? 6 : 8
+    const lift = this.anim === 'hop' ? 2 : 0
+    g.rect(-5, -h - 2 - lift, 10, h + 2).fill(C.outline)
+    g.rect(-4, -h - 1 - lift, 8, h).fill(PARTNER_COLORS[this.kind])
+    if (this.dir !== 'up' && this.anim !== 'sleep') {
+      g.rect(-2, -h + 1 - lift, 1, 1).fill(C.outline)
+      g.rect(1, -h + 1 - lift, 1, 1).fill(C.outline)
+    }
+  }
+
+  /** 작은 Zzz: 글자 하나가 위로 떠오르며 깜빡인다 */
+  private drawZzz(step: number): void {
+    const g = this.zzz
+    g.clear()
+    if (step === 3) return
+    drawGlyph(g, 'Z', 3, PARTNER_ZZZ_TOP - step, C.zzz)
   }
 }

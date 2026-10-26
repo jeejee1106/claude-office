@@ -4,12 +4,15 @@ import type { CharacterCommand } from './commands'
  * 캐릭터별 대기 명령 큐(순수). 도구 호출은 초당 여러 번 오므로 전부 재생하면 화면이 실제보다
  * 수십 초 뒤처진다. 대기 명령이 MAX_QUEUE 를 넘으면 중간의 "버려도 되는" 명령(moveTo/act)을
  * 오래된 것부터 버린다. 마지막 명령(최종 목표)과 spawn/place/leave/remove 는 버리지 않는다.
- * mark·label 은 큐를 거치지 않는다(Character 가 즉시 적용).
+ * mark·label·partner 는 큐를 거치지 않는다(Character 가 즉시 적용).
  */
 
 export const MAX_QUEUE = 3
 
-export type QueuedCommand = Exclude<CharacterCommand, { type: 'mark' } | { type: 'label' }>
+export type QueuedCommand = Exclude<
+  CharacterCommand,
+  { type: 'mark' } | { type: 'label' } | { type: 'partner' }
+>
 
 const droppable = (c: QueuedCommand) => c.type === 'moveTo' || c.type === 'act'
 

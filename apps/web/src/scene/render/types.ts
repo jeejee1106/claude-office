@@ -1,5 +1,6 @@
 import type { AnimName, Effect, Mark } from '../activityMap'
 import type { Dir, Prop } from '../layout'
+import type { PartnerAnim, PartnerKind } from '../partner'
 
 /*
  * 렌더링 경계. Character(상태 머신)·director·OfficeScene 은 이 인터페이스만 안다.
@@ -34,10 +35,24 @@ export interface CharacterView {
   destroy(): void
 }
 
+/**
+ * 파트너 몬스터 하나(partners.json `pet_{kind}_{anim}_{dir}`, 16×16 발끝 앵커).
+ * 캐릭터 층에서 발끝 y 로 깊이 정렬. 한 번 재생 동작(hop·surprised)은 마지막 프레임에서 멈춘다.
+ */
+export interface PartnerView {
+  setPosition(x: number, y: number): void
+  /** 바뀔 때만 호출된다(처음부터 다시 재생). sleep 이면 작은 Zzz 도 */
+  setAnimation(anim: PartnerAnim, dir: Dir): void
+  setAlpha(a: number): void
+  tick(dtMs: number): void
+  destroy(): void
+}
+
 export interface SceneRenderer {
   /** 바닥·벽·가구를 그린다(1회) */
   drawRoom(props: readonly Prop[]): void
   createCharacter(variant: number): CharacterView
+  createPartner(kind: PartnerKind): PartnerView
   setLights(on: boolean): void
   /** 서버실 LED: busy 면 빠르게 깜빡임(명령 실행 중) */
   setServerBusy(busy: boolean): void

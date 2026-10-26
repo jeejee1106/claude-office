@@ -67,9 +67,13 @@ describe('director × fixtures/sample-session.jsonl', () => {
     const between = charCmds(all, 'main').filter(
       (c) => c.type === 'moveTo' && kindOf.get(c.cause) === 'tool.end',
     )
-    // 도구 사이에는 moveTo(soft) 외에 오류 반응(act)만 낀다
+    // 도구 사이에는 moveTo(soft) 외에 오류 반응(act)만 낀다 (표시·파트너 반응은 즉시 명령)
     const other = charCmds(all, 'main').filter(
-      (c) => kindOf.get(c.cause) === 'tool.end' && c.type !== 'moveTo' && c.type !== 'mark',
+      (c) =>
+        kindOf.get(c.cause) === 'tool.end' &&
+        c.type !== 'moveTo' &&
+        c.type !== 'mark' &&
+        c.type !== 'partner',
     )
     expect(other.map((c) => [c.cause, c.type])).toEqual([['e21', 'act']])
     expect(between.length).toBeGreaterThan(0)
@@ -90,7 +94,7 @@ describe('director × fixtures/sample-session.jsonl', () => {
     const sub = charCmds(all, 'sub-a')
     expect(sub[0]).toMatchObject({ type: 'spawn', cause: 'e10' })
     const path = sub
-      .filter((c) => c.type !== 'mark')
+      .filter((c) => c.type !== 'mark' && c.type !== 'partner')
       .filter((c) => !(c.type === 'moveTo' && c.spot === 'research1'))
       .map((c) => (c.type === 'moveTo' ? c.spot : c.type))
     expect(path).toEqual(['spawn', 'cabinet', 'bookshelf', 'leave'])

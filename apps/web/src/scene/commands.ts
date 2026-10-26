@@ -1,5 +1,6 @@
 import type { AnimName, Effect, Mark } from './activityMap'
 import type { SpotId } from './layout'
+import type { PartnerKind, PartnerReaction } from './partner'
 
 /*
  * director → 캐릭터 명령. 순수 데이터(PixiJS 비의존). director 가 만들고 Character 가 실행한다.
@@ -16,13 +17,23 @@ interface Base {
 }
 
 export type CharacterCommand =
-  /** 문 밖에 캐릭터 생성(등장 애니메이션 시작). 뒤따르는 moveTo 로 자리까지 걸어간다. */
-  | (Base & { type: 'spawn'; variant: number; label: string; say?: string | null })
-  /** 애니메이션 없이 즉시 배치(syncAll). 없으면 생성한다. */
+  /**
+   * 문 밖에 캐릭터 생성(등장 애니메이션 시작). 뒤따르는 moveTo 로 자리까지 걸어간다.
+   * partner: 같이 들어오는 파트너 몬스터 종류(없으면 파트너 없음 — 옛 테스트용)
+   */
+  | (Base & {
+      type: 'spawn'
+      variant: number
+      label: string
+      say?: string | null
+      partner?: PartnerKind
+    })
+  /** 애니메이션 없이 즉시 배치(syncAll). 없으면 생성한다. 파트너도 주인 옆 자리에 바로 놓인다 */
   | (Base & {
       type: 'place'
       variant: number
       label: string
+      partner?: PartnerKind
       spot: SpotId
       slot: number
       anim: AnimName
@@ -55,6 +66,11 @@ export type CharacterCommand =
     })
   /** 머리 위 표시(큐를 거치지 않고 즉시). durationMs 없으면 다음 mark 까지 유지 */
   | (Base & { type: 'mark'; mark: Mark | null; durationMs: number | null })
+  /**
+   * 파트너 몬스터 반응(큐를 거치지 않고 즉시): tool.end ok → hop, error → surprised.
+   * 깡충 쿨다운·걷는 중 무시는 Partner 가 정한다.
+   */
+  | (Base & { type: 'partner'; reaction: PartnerReaction })
   /**
    * 이름표 바꾸기(큐를 거치지 않고 즉시). 같은 이름의 사람이 들어오거나 나가 번호("이름 2")가
    * 달라질 때 — 이름표는 상태로 정해지는 표시 이름(employeeSettings.displayNames)을 따른다.

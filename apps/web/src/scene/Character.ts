@@ -7,11 +7,13 @@ import {
   DOOR_OUTSIDE,
   ROWS,
   SPOTS,
+  type SpotId,
   spotPosition,
   TILE,
   type TilePos,
   tileFoot,
 } from './layout'
+import { type Partner, type PartnerOwner, type Point, TRAIL_KEEP_PX, trimTrail } from './partner'
 import { findPath } from './pathfinding'
 import type { CharacterView } from './render/types'
 
@@ -83,12 +85,7 @@ const IDLE_ANIMS: ReadonlySet<AnimName> = new Set([
   'sleep',
 ])
 
-interface Point {
-  x: number
-  y: number
-}
-
-export class Character {
+export class Character implements PartnerOwner {
   readonly agentId: string
   state: CharacterState = 'idle'
   x = 0
@@ -118,10 +115,41 @@ export class Character {
   /** style 있는 leave 의 단계 */
   private leavePhase: 'prep' | 'linger' | 'walk' | 'fade' | null = null
   private _lastCause: string | null = null
+  /** 파트너 몬스터(PartnerOwner 로 이 캐릭터를 읽는다). 주인과 함께 등장·퇴장·제거 */
+  private partner: Partner | null = null
+  /** 걸어온 길(파트너가 따라 걷는다). 오래된 것 → 최근, 현재 위치 제외 */
+  readonly trail: Point[] = []
+  /** 스팟에 도착해 자리 잡았으면 그 스팟(걷는 중·퇴장 중 null) */
+  settledAt: { spot: SpotId; slot: number } | null = null
+  /** 순간이동(spawn·place·따라잡기) 횟수 */
+  teleports = 0
+  /** 걸은 거리 누계(px, 순간이동 제외) */
+  odometer = 0
 
   constructor(agentId: string, view: CharacterView) {
     this.agentId = agentId
     this.view = view
+  }
+
+  /** 파트너 몬스터를 붙인다(Roster) */
+  attachPartner(p: Partner): void {
+    this.partner?.destroy()
+    this.partner = p
+  }
+
+  /** 붙은 파트너(테스트용) */
+  get partnerOf(): Partner | null {
+    return this.partner
+  }
+
+  /** 머리 위 Zzz 가 떠 있는가(파트너도 같이 존다) */
+  get asleep(): boolean {
+    return this.persistentMark === 'sleep'
+  }
+
+  /** 등장·퇴장 페이드 값(0..1) */
+  get alpha(): number {
+    return this.fade
   }
 
   get queued(): number {
@@ -156,6 +184,10 @@ export class Character {
       this.view.setLabel(cmd.label)
       return
     }
+    if (cmd.type === 'partner') {
+      this.partner?.react(cmd.reaction)
+      return
+    }
     if (cmd.type === 'place' || cmd.type === 'remove') {
       // 즉시 명령: 큐를 비우고 바로 적용(syncAll)
       this.queue.clear()
@@ -179,6 +211,7 @@ export class Character {
     if (this.isGone) return
     this.view.setPosition(this.x, this.y)
     this.view.tick(dtMs)
+    this.partner?.update(dtMs, this)
   }
 
   private step(dtMs: number): void {
@@ -235,6 +268,7 @@ export class Character {
     if (end !== undefined) {
       this.x = end.x
       this.y = end.y
+      this.teleport()
     }
     this.path = []
     this.waitMs = 0
@@ -263,7 +297,15 @@ export class Character {
   }
 
   destroy(): void {
+    this.partner?.destroy()
+    this.partner = null
     this.view.destroy()
+  }
+
+  /** 위치를 건너뛰었다 — 걸어온 길을 지우고 파트너도 옮기게 한다 */
+  private teleport(): void {
+    this.trail.length = 0
+    this.teleports++
   }
 
   // -------------------------------------------------------------------------
@@ -282,6 +324,8 @@ export class Character {
         const p = tileFoot(DOOR_OUTSIDE)
         this.x = p.x
         this.y = p.y
+        this.teleport()
+        this.settledAt = null
         this.dir = 'up'
         this.state = 'spawning'
         this.view.setLabel(cmd.label)
@@ -296,6 +340,8 @@ export class Character {
         const p = spotPosition(cmd.spot, cmd.slot)
         this.x = p.x
         this.y = p.y
+        this.teleport()
+        this.settledAt = { spot: cmd.spot, slot: cmd.slot }
         this.dir = SPOTS[cmd.spot].face
         this.view.setLabel(cmd.label)
         this.speech = false
@@ -313,6 +359,7 @@ export class Character {
         break
       }
       case 'moveTo': {
+        this.settledAt = null
         this.showTool(cmd.bubble)
         this.view.setEffect(null)
         this.setPathTo(SPOTS[cmd.spot].tile, spotPosition(cmd.spot, cmd.slot))
@@ -331,6 +378,7 @@ export class Character {
         this.actMs = 0
         break
       case 'leave':
+        this.settledAt = null
         this.showTool(null)
         // 퇴장 대사는 사라질 때까지 유지
         if (cmd.say) this.say(cmd.say, null)
@@ -363,6 +411,7 @@ export class Character {
         this.state = 'walking'
         break
       case 'moveTo':
+        this.settledAt = { spot: cmd.spot, slot: cmd.slot }
         this.dir = SPOTS[cmd.spot].face
         this.view.setAnimation(cmd.anim, this.dir)
         this.view.setEffect(cmd.effect)
@@ -406,6 +455,7 @@ export class Character {
       col: Math.min(Math.max(Math.floor(this.x / TILE), 0), COLS - 1),
       row: Math.min(Math.max(Math.floor(this.y / TILE), 0), ROWS - 1),
     }
+    this.trail.push({ x: this.x, y: this.y })
     const tiles = findPath(from, goalTile)
     const pts = tiles.map(tileFoot)
     pts.pop()
@@ -481,24 +531,32 @@ export class Character {
       }
       this.view.setAnimation('walk', this.dir)
       if (dist <= budget) {
+        // 모서리(x 먼저 → y)도 길에 남긴다 — 파트너가 가구 모서리를 가로지르지 않게
+        if (dx !== 0 && dy !== 0) this.trail.push({ x: target.x, y: this.y })
         this.x = target.x
         this.y = target.y
         budget -= dist
+        this.odometer += dist
         this.path.shift()
+        this.trail.push({ x: this.x, y: this.y })
       } else {
         // 축 정렬 이동(먼저 큰 축)
         if (Math.abs(dx) > 0) {
           const step = Math.min(Math.abs(dx), budget)
           this.x += Math.sign(dx) * step
           budget -= step
+          this.odometer += step
         }
         if (budget > 0 && Math.abs(dy) > 0) {
+          this.trail.push({ x: this.x, y: this.y })
           const step = Math.min(Math.abs(dy), budget)
           this.y += Math.sign(dy) * step
           budget -= step
+          this.odometer += step
         }
       }
     }
+    trimTrail(this, this.trail, TRAIL_KEEP_PX)
   }
 
   private applyMark(mark: Mark | null, durationMs: number | null): void {
