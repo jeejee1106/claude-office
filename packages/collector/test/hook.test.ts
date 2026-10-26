@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OfficeEvent, PATHS } from '@claude-office/shared'
 import { afterEach, describe, expect, it } from 'vitest'
+import { DEFAULT_URL } from '../src/send'
 import { FIXTURE_DIR, HOOK_BIN } from './helpers'
 
 interface RunResult {
@@ -95,11 +96,9 @@ describe('claude-office-hook 프로세스', () => {
     expect(best).toBeLessThan(300)
   })
 
-  it('기본 URL(127.0.0.1:7333)로도 서버 없이 exit 0', async () => {
-    // 7333 에 실제 서버가 떠 있으면 이벤트가 하나 들어갈 뿐이고 결과는 같다.
-    const r = await runHook(fixture('Stop.json'))
-    expect(r.code).toBe(0)
-    expect(r.stdout).toBe('')
+  it('기본 URL 은 127.0.0.1:7333/events', () => {
+    // 실제로 보내지 않는다: 켜 둔 서버에 테스트 세션(demo-app 층)이 생긴다(2026-10-26 사용자 관찰).
+    expect(DEFAULT_URL).toBe('http://127.0.0.1:7333/events')
   })
 
   it('POST /events, JSON 단일 객체, Origin 없음 — 서버 계약과 일치 (B2)', async () => {
