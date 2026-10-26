@@ -310,6 +310,17 @@ describe('normalize: 유령 서브에이전트 (C5)', () => {
       kind: 'agent.finish',
     })
   })
+
+  it('재개(같은 agent_id 로 Start/Stop 이 다시 옴): 매번 다른 id 라 서버가 중복으로 버리지 않는다', () => {
+    const ctx = fixedContext()
+    const ids = [
+      'SubagentStart.json',
+      'SubagentStop.json',
+      'SubagentStart.json',
+      'SubagentStop.json',
+    ].map((f) => normalize(loadFixture(f), ctx)?.id)
+    expect(new Set(ids).size).toBe(4)
+  })
 })
 
 describe('attentionClear (C4)', () => {

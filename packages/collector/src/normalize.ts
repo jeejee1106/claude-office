@@ -166,9 +166,12 @@ export function normalize(hookInput: unknown, ctx: NormalizeContext): OfficeEven
       const agentType = str(input.agent_type)
       // agent_type 이 비면 유령(내부 에이전트, hook-notes 2026-10-23) → 보내지 않는다.
       if (!subagentId || !agentType) return null
+      // 끝난 서브에이전트에게 SendMessage 를 보내면 같은 agent_id 로 Start/Stop 이 다시 온다
+      // (hook-notes 2026-10-25). 결정적 ID 면 서버가 두 번째를 중복으로 버려, 다시 온 팀원이
+      // 퇴근하지 못하고 책상에서 졸게 된다 → 매번 새 ID.
       candidate = {
         ...base,
-        id: stableId([sessionId, 'agent.spawn', subagentId], ctx),
+        id: ctx.newId(),
         kind: 'agent.spawn',
         agentType: truncate(agentType, 60),
       }
@@ -179,7 +182,7 @@ export function normalize(hookInput: unknown, ctx: NormalizeContext): OfficeEven
       if (!subagentId || !str(input.agent_type)) return null
       candidate = {
         ...base,
-        id: stableId([sessionId, 'agent.finish', subagentId], ctx),
+        id: ctx.newId(), // SubagentStart 와 같은 이유로 매번 새 ID
         kind: 'agent.finish',
       }
       break

@@ -363,7 +363,7 @@ exports[`normalize: 모든 fixture > SubagentStart.json 1`] = `
 {
   "agentId": "a9d6fcc6fccdd5788",
   "agentType": "Explore",
-  "id": "00000000-0000-4000-8000-000000000001/agent.spawn/a9d6fcc6fccdd5788",
+  "id": "id-1",
   "kind": "agent.spawn",
   "project": "demo-app",
   "sessionId": "00000000-0000-4000-8000-000000000001",
@@ -376,7 +376,7 @@ exports[`normalize: 모든 fixture > SubagentStart.nested.json 1`] = `
 {
   "agentId": "a473c5664f8a7266d",
   "agentType": "Explore",
-  "id": "00000000-0000-4000-8000-000000000001/agent.spawn/a473c5664f8a7266d",
+  "id": "id-1",
   "kind": "agent.spawn",
   "project": "demo-app",
   "sessionId": "00000000-0000-4000-8000-000000000001",
@@ -388,7 +388,7 @@ exports[`normalize: 모든 fixture > SubagentStart.nested.json 1`] = `
 exports[`normalize: 모든 fixture > SubagentStop.json 1`] = `
 {
   "agentId": "a9d6fcc6fccdd5788",
-  "id": "00000000-0000-4000-8000-000000000001/agent.finish/a9d6fcc6fccdd5788",
+  "id": "id-1",
   "kind": "agent.finish",
   "project": "demo-app",
   "sessionId": "00000000-0000-4000-8000-000000000001",

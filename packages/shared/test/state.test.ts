@@ -165,6 +165,21 @@ describe('reduce — 시나리오', () => {
     expect(s2.sessions.s1?.agents.sub?.finishedAt).toBe(at(3))
   })
 
+  it('재개된 서브에이전트(같은 agentId 로 spawn·finish 가 다시 옴): 다시 일하고 다시 퇴장한다', () => {
+    let s = run([
+      ev(0, { kind: 'session.start' }),
+      ev(1, { kind: 'agent.spawn', agentType: 'Explore' }, 'sub'),
+      ev(2, { kind: 'agent.finish' }, 'sub'),
+      ev(10, { kind: 'agent.spawn', agentType: 'Explore' }, 'sub'),
+    ])
+    expect(s.sessions.s1?.agents.sub?.activity).toBe('working')
+    expect(s.sessions.s1?.agents.sub?.finishedAt).toBeUndefined()
+
+    s = reduce(s, ev(12, { kind: 'agent.finish' }, 'sub'))
+    expect(s.sessions.s1?.agents.sub?.activity).toBe('gone')
+    expect(s.sessions.s1?.agents.sub?.finishedAt).toBe(at(12))
+  })
+
   it('spawn 보다 먼저 온 finish: throw 없이 gone 유지, 늦은 spawn 은 메타데이터만 채운다', () => {
     const s = run([
       ev(5, { kind: 'agent.finish', parentAgentId: 'main' }, 'sub'),
