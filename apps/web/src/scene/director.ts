@@ -7,6 +7,7 @@ import {
   type SessionState,
 } from '@claude-office/shared'
 import {
+  accessoryOf,
   baseName,
   DEFAULT_EMPLOYEE_SETTINGS,
   displayNameOf,
@@ -16,6 +17,7 @@ import {
   variantOf,
 } from '../employeeSettings'
 import { getLang, type Lang, type LineKey, pickLine } from '../i18n'
+import type { Accessory } from './accessory'
 import {
   type AnimName,
   BRIEF_TOOL_MS,
@@ -65,6 +67,10 @@ export interface DirectorOptions {
   teams?: () => TeamConfig
 }
 
+/** spawn/place 의 소품 칸: none 이면 싣지 않는다(명령이 옛 모양 그대로) */
+const accessoryField = (info: { accessory: Accessory }): { accessory?: Accessory } =>
+  info.accessory === 'none' ? {} : { accessory: info.accessory }
+
 /** 화이트보드 글씨를 기억하는 세션 수 상한 */
 const MAX_PLANNED_SESSIONS = 64
 
@@ -74,6 +80,8 @@ interface CharInfo {
   label: string
   /** 파트너 몬스터 종류(팀장 boss, 팀원 자기 팀 — 책상 배정과 같은 팀 규칙) */
   partner: PartnerKind
+  /** 외모 소품(직원 설정) */
+  accessory: Accessory
   /** 자기 책상 */
   desk: SpotId
   /** 현재(마지막으로 명령한) 스팟과 슬롯 */
@@ -183,6 +191,7 @@ export class Director {
         variant: info.variant,
         label: info.label,
         partner: info.partner,
+        ...accessoryField(info),
         spot,
         slot,
         anim: p.anim,
@@ -281,6 +290,7 @@ export class Director {
         variant: info.variant,
         label: info.label,
         partner: info.partner,
+        ...accessoryField(info),
         // 등장 대사(출근·"부르셨어요?")는 문에서 들어올 때
         say: act.motion === 'enter' ? this.line(act.line, cause) : null,
       })
@@ -515,6 +525,7 @@ export class Director {
       agentId,
       variant: variantOf(agentId, agentType, emp),
       partner: partnerKindOf(agentId, agentType, this.teams()),
+      accessory: accessoryOf(agentId, agentType, emp),
       label:
         session?.agents[agentId] !== undefined
           ? displayNameOf(agentId, session, emp)

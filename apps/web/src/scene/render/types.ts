@@ -1,3 +1,4 @@
+import type { Accessory } from '../accessory'
 import type { AnimName, Effect, Mark } from '../activityMap'
 import type { Dir, Prop } from '../layout'
 import type { PartnerAnim, PartnerKind } from '../partner'
@@ -51,7 +52,8 @@ export interface PartnerView {
 export interface SceneRenderer {
   /** 바닥·벽·가구를 그린다(1회) */
   drawRoom(props: readonly Prop[]): void
-  createCharacter(variant: number): CharacterView
+  /** accessory: 외모 소품(accessories.json 을 캐릭터 프레임에 맞춰 겹쳐 그림). 없으면 none */
+  createCharacter(variant: number, accessory?: Accessory): CharacterView
   createPartner(kind: PartnerKind): PartnerView
   setLights(on: boolean): void
   /** 서버실 LED: busy 면 빠르게 깜빡임(명령 실행 중) */

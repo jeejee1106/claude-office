@@ -7,6 +7,7 @@ import {
   type SceneListener,
   type StoreState,
 } from '../store/officeStore'
+import { ACCESSORY_ATLAS_URL, type AccessoryAtlas, missingAccessoryFrames } from './accessory'
 import type { DirectorOutput } from './commands'
 import { Director } from './director'
 import { BASE_HEIGHT, BASE_WIDTH, PROPS } from './layout'
@@ -87,6 +88,8 @@ export class OfficeScene {
       loadOfficeAtlas(),
       loadPartnerAtlas(),
     ])
+    // 소품 시트는 캐릭터 프레임 이름으로 빠진 프레임을 세므로 캐릭터 아틀라스 다음에
+    const accessories = await loadAccessoryAtlas(atlas)
     if (this.destroyed) {
       app.destroy(true, { children: true })
       return
@@ -113,11 +116,12 @@ export class OfficeScene {
       atlas,
       office,
       partners,
+      accessories,
     )
     this.renderer = renderer
     renderer.drawRoom(PROPS)
     this.roster = new Roster(
-      (variant) => renderer.createCharacter(variant),
+      (variant, accessory) => renderer.createCharacter(variant, accessory),
       (cmd) => {
         if (cmd.type === 'lights') renderer.setLights(cmd.on)
         else if (cmd.type === 'servers') renderer.setServerBusy(cmd.busy)
@@ -241,8 +245,40 @@ function createRenderer(
   atlas: CharacterAtlas<Texture> | null,
   office: OfficeAtlas<Texture> | null,
   partners: PartnerAtlas<Texture> | null,
+  accessories: AccessoryAtlas<Texture> | null,
 ): SceneRenderer {
-  return new PlaceholderRenderer(layers, overlay, atlas, office, partners)
+  return new PlaceholderRenderer(layers, overlay, atlas, office, partners, accessories)
+}
+
+/**
+ * accessories.json(+png) 로드 — 외모 소품. 실패하면 경고만 남기고 null(소품을 그리지 않는다).
+ * 프레임 이름은 캐릭터 프레임 이름의 char_{v}_ → acc_{kind}_ (accessory.ts).
+ */
+async function loadAccessoryAtlas(
+  chars: CharacterAtlas<Texture> | null,
+): Promise<AccessoryAtlas<Texture> | null> {
+  const url = `${import.meta.env.BASE_URL}${ACCESSORY_ATLAS_URL}`
+  try {
+    const sheet: unknown = await Assets.load(url)
+    if (!(sheet instanceof Spritesheet) || Object.keys(sheet.textures).length === 0) {
+      console.warn(`[claude-office] ${url} 이 소품 시트 형식이 아님 — 소품을 그리지 않습니다.`)
+      return null
+    }
+    sheet.textureSource.scaleMode = 'nearest'
+    if (chars?.frameNames !== undefined) {
+      const names = Object.values(chars.frameNames).flatMap((l) => l ?? [])
+      const missing = missingAccessoryFrames(names, (n) => sheet.textures[n] !== undefined)
+      if (missing.length > 0) {
+        console.warn(
+          `[claude-office] 소품 시트에 프레임 ${missing.length}개 없음(예: ${missing[0]}) — 그 프레임에서는 소품을 그리지 않습니다.`,
+        )
+      }
+    }
+    return { frames: { ...sheet.textures } }
+  } catch (err) {
+    console.warn(`[claude-office] 소품 시트 로드 실패(${url}) — 소품을 그리지 않습니다.`, err)
+    return null
+  }
 }
 
 /** partners.json(+png) 로드 — 파트너 몬스터. 실패하면 경고만 남기고 null(색 덩어리로 그린다) */
@@ -315,7 +351,12 @@ async function loadCharacterAtlas(): Promise<CharacterAtlas<Texture> | null> {
         `[claude-office] 캐릭터 아틀라스에 애니메이션 ${missing.length}개 없음(예: ${missing[0]}) — 그 동작만 플레이스홀더로 그립니다.`,
       )
     }
-    return { animations: sheet.animations, frameMs: parseFrameMs(sheet.data.meta) }
+    return {
+      animations: sheet.animations,
+      frameMs: parseFrameMs(sheet.data.meta),
+      // 소품이 캐릭터 프레임 이름으로 자기 프레임을 찾는다
+      frameNames: sheet.data.animations ?? {},
+    }
   } catch (err) {
     console.warn(
       `[claude-office] 캐릭터 아틀라스 로드 실패(${url}) — 플레이스홀더로 그립니다.`,

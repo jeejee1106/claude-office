@@ -475,9 +475,18 @@ body {
   border-color: var(--accent);
 }
 .emp-sprite {
+  position: relative;
   display: block;
   background-repeat: no-repeat;
   image-rendering: pixelated;
+}
+/* 외모 소품: 캐릭터 미리보기 위에 같은 배율로 겹침 */
+.emp-acc {
+  position: absolute;
+  display: block;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 .emp-chip {
   display: flex;

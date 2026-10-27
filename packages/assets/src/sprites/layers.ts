@@ -28,10 +28,14 @@ export type Key =
   | 'U' // blueDark
   | 'n' // chestnut (가방)
   | 'N' // chestnutDark
-  | 'y' // sky (소파 등받이 윗면)
+  | 'y' // sky (소파 등받이 윗면, 안경알)
+  | 'P' // pink (리본)
+  | 'R' // coralDark (야구 모자 챙·그림자)
 
 const KEYS = new Set<string>([
   'y',
+  'P',
+  'R',
   'o',
   'w',
   's',
@@ -96,11 +100,20 @@ export function shift(layer: Layer, dx: number, dy: number): Layer {
 /** 프레임 = 기호 그리드(null 은 투명) */
 export type KeyFrame = (Key | null)[][]
 
-export function compose(layers: readonly Layer[], w: number, h: number, where: string): KeyFrame {
+/** clip = true 면 프레임 밖 픽셀을 버린다(외모 소품 오버레이용). 기본은 밖으로 나가면 오류 */
+export function compose(
+  layers: readonly Layer[],
+  w: number,
+  h: number,
+  where: string,
+  clip = false,
+): KeyFrame {
   const out: KeyFrame = Array.from({ length: h }, () => Array<Key | null>(w).fill(null))
   const put = (x: number, y: number, k: Key) => {
-    if (x < 0 || y < 0 || x >= w || y >= h)
+    if (x < 0 || y < 0 || x >= w || y >= h) {
+      if (clip) return
       throw new Error(`${where}: pixel (${x},${y}) is outside the ${w}x${h} frame`)
+    }
     ;(out[y] as (Key | null)[])[x] = k
   }
   for (const layer of layers) {

@@ -35,6 +35,8 @@ const FIXED: Record<Exclude<Key, 'c' | 'C' | 'h' | 'H'>, ColorName> = {
   n: 'chestnut',
   N: 'chestnutDark',
   y: 'sky',
+  P: 'pink',
+  R: 'coralDark',
 }
 
 export function keyColor(k: Key, v: CharacterVariant): ColorName {
