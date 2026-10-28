@@ -261,6 +261,9 @@ importers:
 
   packages/collector:
     dependencies:
+      '@claude-office/server':
+        specifier: workspace:*
+        version: link:../../apps/server
       '@claude-office/shared':
         specifier: workspace:*
         version: link:../shared

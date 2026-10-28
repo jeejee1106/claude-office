@@ -4,6 +4,10 @@
   "private": true,
   "description": "Claude Office local server: event ingest, OfficeState aggregation, WebSocket broadcast, record/replay.",
   "type": "module",
+  "exports": {
+    "./run": "./src/run.ts",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

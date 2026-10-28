@@ -60,6 +60,16 @@ The web UI is not built. Run \`pnpm --filter @claude-office/web build\` and rest
 or use the dev server: \`pnpm --filter @claude-office/web dev\` → http://localhost:5173
 `
 
+/** buildApp 의 webDistDir 옵션을 실제 경로로 푼다. undefined → DEFAULT_WEB_DIST, false → false. */
+export function resolveWebDist(dir: string | false | undefined): string | false {
+  return dir === undefined ? DEFAULT_WEB_DIST : dir
+}
+
+/** buildApp 이 이 경로로 빌드된 web 을 서빙하는지(index.html 이 있는지). */
+export function hasWebDist(dir: string | false): dir is string {
+  return dir !== false && dir !== '' && existsSync(join(dir, 'index.html'))
+}
+
 /** Fastify 인스턴스를 만든다. 포트는 열지 않는다(테스트는 app.inject 사용). */
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
   const now = opts.now ?? Date.now
@@ -122,8 +132,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     },
   )
 
-  const webDist = opts.webDistDir === undefined ? DEFAULT_WEB_DIST : opts.webDistDir
-  if (webDist && existsSync(join(webDist, 'index.html'))) {
+  const webDist = resolveWebDist(opts.webDistDir)
+  if (hasWebDist(webDist)) {
     await app.register(fastifyStatic, { root: webDist, prefix: '/' })
   } else {
     app.get('/', async (_req, reply) => reply.type('text/plain; charset=utf-8').send(NO_WEB_TEXT))

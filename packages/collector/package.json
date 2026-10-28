@@ -2,7 +2,7 @@
   "name": "@claude-office/collector",
   "version": "0.1.0",
   "private": true,
-  "description": "Claude Office collector: Claude Code hook -> OfficeEvent -> local server, plus install/uninstall of the hooks in settings.json.",
+  "description": "Claude Office collector and CLI: Claude Code hook -> OfficeEvent -> local server; `claude-office` starts the server + office screen, `claude-office install|uninstall` manages the hooks in settings.json.",
   "type": "module",
   "bin": {
     "claude-office-hook": "./dist/claude-office-hook.js",
@@ -14,6 +14,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@claude-office/server": "workspace:*",
     "@claude-office/shared": "workspace:*"
   },
   "devDependencies": {

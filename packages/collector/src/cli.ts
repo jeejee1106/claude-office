@@ -10,6 +10,8 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { DEFAULT_HOST, DEFAULT_PORT } from '@claude-office/shared'
+import { dispatch, webDistDir } from './dispatch'
 import {
   addOurHooks,
   formatSettings,
@@ -22,13 +24,23 @@ import {
   SettingsFormatError,
 } from './settings'
 
-const HELP = `claude-office — Claude Code 훅 설치 도구
+const HELP = `claude-office — Claude Code activity as a pixel-art office
 
 Usage:
+  claude-office [server options]   start the server + office screen (default http://127.0.0.1:7333)
   claude-office install   [--project | --user | --settings <file>] [--dry-run]
   claude-office uninstall [--project | --user | --settings <file>] [--dry-run]
+  claude-office help
 
-Targets:
+Server options (the screen is served from apps/web/dist; build it with \`pnpm --filter @claude-office/web build\`):
+  --port <n>         listen port (default ${DEFAULT_PORT}, env CLAUDE_OFFICE_PORT)
+  --host <addr>      bind address (default ${DEFAULT_HOST}; non-loopback prints a warning)
+  --record <file>    append every received event to a JSONL file
+  --replay <file>    replay a recorded JSONL session into the server
+  --speed <n>        replay speed multiplier (default 4)
+  --loop             repeat the replay forever (each run is a new session)
+
+Install targets:
   --user             ~/.claude/settings.json (default; every Claude Code session; honors CLAUDE_CONFIG_DIR)
   --project          ./.claude/settings.json (this project only; this file is usually committed)
   --settings <file>  any settings.json path
@@ -102,16 +114,30 @@ function writeSettings(file: string, after: string): string | undefined {
   return backup
 }
 
-function run(argv: string[]): number {
-  const [command, ...rest] = argv
-  if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
-    console.log(HELP)
-    return command === undefined ? 1 : 0
+async function main(argv: string[]): Promise<number | undefined> {
+  const d = dispatch(argv)
+  switch (d.kind) {
+    case 'help':
+      console.log(HELP)
+      return 0
+    case 'unknown':
+      throw new CliError(`unknown command: ${d.command}\n\n${HELP}`)
+    case 'install':
+    case 'uninstall':
+      return installOrUninstall(d.kind, d.args)
+    case 'server': {
+      // 서버 코드(fastify 등)는 서버를 띄울 때만 초기화한다. 종료 코드·신호 처리는 runServer 가 맡는다.
+      const { runServer } = await import('@claude-office/server/run')
+      await runServer(d.args, {
+        webDistDir: webDistDir(import.meta.url),
+        progName: 'claude-office',
+      })
+      return undefined
+    }
   }
-  if (command !== 'install' && command !== 'uninstall') {
-    throw new CliError(`unknown command: ${command}\n\n${HELP}`)
-  }
+}
 
+function installOrUninstall(command: 'install' | 'uninstall', rest: string[]): number {
   let values: { user?: boolean; project?: boolean; settings?: string; 'dry-run'?: boolean }
   try {
     values = parseArgs({
@@ -169,7 +195,7 @@ function run(argv: string[]): number {
   console.log(`Updated ${file}${backup ? ` (backup: ${backup})` : ''}:\n${diff}`)
   if (command === 'install') {
     console.log(
-      `\nInstalled the Claude Office hook for ${HOOK_EVENTS.length} events. Start the dashboard with \`pnpm dev\` and use Claude Code as usual.`,
+      `\nInstalled the Claude Office hook for ${HOOK_EVENTS.length} events. Start the office with \`claude-office\` (in this repo: \`pnpm office\`), open http://${DEFAULT_HOST}:${DEFAULT_PORT}, and use Claude Code as usual.`,
     )
   } else {
     console.log('\nRemoved the Claude Office hooks.')
@@ -178,7 +204,8 @@ function run(argv: string[]): number {
 }
 
 try {
-  process.exitCode = run(process.argv.slice(2))
+  const code = await main(process.argv.slice(2))
+  if (code !== undefined) process.exitCode = code
 } catch (err) {
   console.error(`claude-office: ${err instanceof Error ? err.message : String(err)}`)
   process.exitCode = 1

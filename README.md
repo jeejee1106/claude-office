@@ -34,14 +34,18 @@
 ```bash
 pnpm install
 pnpm --filter @claude-office/collector build
-node packages/collector/dist/claude-office.js install   # 기본: 전역(~/.claude/settings.json)
-pnpm dev
+node packages/collector/dist/claude-office.js install   # 훅 설치. 기본: 전역(~/.claude/settings.json)
+pnpm office                                              # 화면 빌드 → 수집기 빌드 → 서버 + 화면 실행
 ```
 
-그다음 평소처럼 Claude Code를 쓰고, 브라우저에서 <http://localhost:5173>을 엽니다.
+그다음 평소처럼 Claude Code를 쓰고, 브라우저에서 <http://127.0.0.1:7333>을 엽니다. (서버가 빌드된 화면까지 함께 보여 주므로 포트 하나로 충분합니다.)
 
+- `claude-office` 명령 하나로 동작합니다. 인자 없이(또는 `--port`, `--host`, `--record`, `--replay`, `--speed`, `--loop` 같은 서버 옵션만 붙여) 실행하면 서버 + 화면이 뜨고, `install` / `uninstall`은 훅을 설치/제거합니다. 저장소 안에서는 `pnpm office`가 이 명령을 실행하고, 뒤에 붙인 인자는 서버로 넘어갑니다(예: `pnpm office --port 7444`). 도움말은 `node packages/collector/dist/claude-office.js help`.
+- 이전 버전에서는 인자 없이 실행하면 도움말을 보여 주고 종료 코드 1로 끝났지만, 이제는 서버를 시작합니다.
 - `install`은 기존 설정을 백업(`settings.json.bak`)하고 바뀐 내용을 보여 줍니다. 미리 보기만 하려면 `--dry-run`을 붙이세요.
 - 캐릭터가 움직이지 않으면 Claude Code를 새로 시작해 보세요.
+- 아직 npm으로 정식 배포되기 전이라, `claude-office`를 어디서나 쓰게 하는 설치 방법은 안내하지 않습니다. 저장소에서 `pnpm office`를 쓰세요.
+- 화면 코드를 고치며 개발할 때는 `pnpm dev`(화면 http://localhost:5173 + 서버 7333, 코드가 바뀌면 자동 재시작)를 씁니다.
 
 제거하려면:
 
