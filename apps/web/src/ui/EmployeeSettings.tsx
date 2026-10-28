@@ -246,6 +246,40 @@ function VariantPicker(props: {
   )
 }
 
+/** 소품 고르기: 지금 고른 색의 캐릭터가 소품을 쓴 모습을 하나씩 보여 주고 눌러서 고른다.
+ *  시트를 못 읽으면 그림 대신 소품 이름을 보여 준다 */
+function AccessoryPicker(props: {
+  value: Accessory
+  variant: number
+  atlas: PreviewAtlas
+  lang: Lang
+  label: string
+  onPick: (a: Accessory) => void
+}) {
+  const { value, variant, atlas, lang, label, onPick } = props
+  const pictures = atlas.chars !== null && atlas.acc !== null
+  return (
+    <fieldset className="emp-variants" aria-label={label}>
+      {ACCESSORIES.map((a) => (
+        <button
+          key={a}
+          type="button"
+          className={a === value ? 'emp-variant selected' : 'emp-variant'}
+          aria-pressed={a === value}
+          title={accessoryName(a, lang)}
+          onClick={() => onPick(a)}
+        >
+          {pictures ? (
+            <VariantPreview variant={variant} accessory={a} atlas={atlas} />
+          ) : (
+            <span className="emp-acc-name">{accessoryName(a, lang)}</span>
+          )}
+        </button>
+      ))}
+    </fieldset>
+  )
+}
+
 function Row(props: {
   kind: string
   agentType: string | null
@@ -305,19 +339,14 @@ function Row(props: {
         />
       </td>
       <td>
-        <select
-          aria-label={`${kind} ${t('empAccessory', lang)}`}
+        <AccessoryPicker
           value={accessory}
-          onChange={(e) =>
-            patch({ accessory: e.target.value === 'none' ? undefined : e.target.value })
-          }
-        >
-          {ACCESSORIES.map((a) => (
-            <option key={a} value={a}>
-              {accessoryName(a, lang)}
-            </option>
-          ))}
-        </select>
+          variant={variant}
+          atlas={atlas}
+          lang={lang}
+          label={`${kind} ${t('empAccessory', lang)}`}
+          onPick={(a) => patch({ accessory: a === 'none' ? undefined : a })}
+        />
       </td>
     </tr>
   )

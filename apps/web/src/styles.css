@@ -488,6 +488,10 @@ body {
   image-rendering: pixelated;
   pointer-events: none;
 }
+.emp-acc-name {
+  padding: 2px 4px;
+  font-size: 12px;
+}
 .emp-chip {
   display: flex;
   flex-direction: column;
