@@ -235,6 +235,11 @@ describe('C3 clear 판단', () => {
     expect(out[0]?.clear).toMatchObject({ agentId: 'main' })
   })
 
+  it('내부 서브에이전트(agent_type 없음)의 PermissionRequest 는 기록하지 않는다', () => {
+    const { agent_type: _drop, ...permTypeless } = permSub as Record<string, unknown>
+    expect(run([[permTypeless, 1000]]).pending).toEqual({})
+  })
+
   it('유령 SubagentStart(agent_type 없음)는 Agent 요청을 건드리지 않는다', () => {
     const start: Pending = { main: { ts: 1000, tool: 'Agent', notified: true } }
     const ghost = { ...subStart, agent_type: '' }
