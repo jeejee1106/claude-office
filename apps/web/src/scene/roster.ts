@@ -1,3 +1,4 @@
+import type { Accessory } from './accessory'
 import { Character } from './Character'
 import { type DirectorOutput, isCharacterCommand, type SceneCommand } from './commands'
 import { Partner, type PartnerKind } from './partner'
@@ -8,7 +9,7 @@ import type { CharacterView, PartnerView } from './render/types'
  * OfficeScene 과 테스트(시뮬레이션 시계)가 같은 코드를 쓴다.
  */
 export class Roster {
-  private readonly createView: (variant: number) => CharacterView
+  private readonly createView: (variant: number, accessory: Accessory) => CharacterView
   private readonly onScene: (cmd: SceneCommand) => void
   /** 조명 끄기 대기 중(퇴장 중인 사람이 다 나가면 끈다 — 기획서 5절 "마지막 사람이 나가면") */
   private lightsOffPending: SceneCommand | null = null
@@ -21,7 +22,7 @@ export class Roster {
   private readonly createPartner: ((kind: PartnerKind) => PartnerView) | null
 
   constructor(
-    createView: (variant: number) => CharacterView,
+    createView: (variant: number, accessory: Accessory) => CharacterView,
     onScene: (cmd: SceneCommand) => void,
     createPartner: ((kind: PartnerKind) => PartnerView) | null = null,
   ) {
@@ -62,7 +63,7 @@ export class Roster {
         case 'spawn':
         case 'place':
           if (ch === undefined) {
-            ch = new Character(cmd.agentId, this.createView(cmd.variant))
+            ch = new Character(cmd.agentId, this.createView(cmd.variant, cmd.accessory ?? 'none'))
             ch.setHighlight(this.highlight === cmd.agentId)
             if (cmd.partner !== undefined && this.createPartner !== null) {
               ch.attachPartner(new Partner(cmd.partner, this.createPartner(cmd.partner)))

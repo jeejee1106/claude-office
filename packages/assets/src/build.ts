@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { packAccessories } from './accessorySheet'
 import { encodePng, type PixelImage } from './canvas'
 import { packOffice } from './officeSheet'
 import { packPartners } from './partnerSheet'
@@ -11,6 +12,7 @@ import { assertPalette, offPalettePixels } from './validate'
  * 모든 시트를 그려 apps/web/public/assets/{sheet}.png + {sheet}.json 으로 쓴다.
  *   characters: 캐릭터 8변형 × 행동 × 4방향
  *   partners:   파트너 몬스터 5종 × 행동 (16×16, pet_*)
+ *   accessories: 외모 소품 5종 오버레이 (캐릭터 프레임과 같은 크기·앵커, acc_*)
  *   office:     업무 공간 바닥·벽·칸막이 타일, 책상·의자, 팀 간판 3조각, 소품
  * 실행: pnpm --filter @claude-office/assets build
  */
@@ -42,6 +44,14 @@ console.log(
   `partners: ${Object.keys(partners.atlas.frames).length} frames, ` +
     `${Object.keys(partners.atlas.animations).length} animations, ` +
     `${partners.image.width}x${partners.image.height}px -> ${OUTPUT_DIR}`,
+)
+
+const acc = packAccessories()
+write('accessories', acc.image, acc.atlas)
+console.log(
+  `accessories: ${Object.keys(acc.atlas.frames).length} frames, ` +
+    `${Object.keys(acc.atlas.animations).length} animations, ` +
+    `${acc.image.width}x${acc.image.height}px -> ${OUTPUT_DIR}`,
 )
 
 const office = packOffice()

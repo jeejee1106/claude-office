@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js'
 import { subscribeLang, teamName } from '../../i18n'
+import { type Accessory, type AccessoryAtlas, pickAccessoryFrame } from '../accessory'
 import type { AnimName, Effect, Mark } from '../activityMap'
 import {
   BASE_HEIGHT,
@@ -16,7 +17,14 @@ import {
 } from '../layout'
 import type { PartnerAnim, PartnerKind } from '../partner'
 import type { TeamId } from '../teams'
-import { animKey, type CharacterAtlas, pickFrame, resolveAnim, SOFA_POSES } from './characterSheet'
+import {
+  animKey,
+  type CharacterAtlas,
+  pickFrame,
+  pickFrameName,
+  resolveAnim,
+  SOFA_POSES,
+} from './characterSheet'
 import {
   ANIM_MS,
   DEFAULT_SIGN,
@@ -154,6 +162,8 @@ const FRAME_MS = 180
 let warned = false
 /** 아틀라스에 없는 키는 한 번씩만 경고한다 */
 const warnedKeys = new Set<string>()
+/** 소품 경고(시트 없음 = 'sheet', 프레임 없음 = 소품 종류)는 한 번씩만 */
+const warnedAccessory = new Set<string>()
 
 /** 상태(트리거)가 켜지면 active 프레임을 ms 간격으로 돌리고, 꺼지면 idle 로 돌아가는 가구 */
 interface PropToggle {
@@ -207,10 +217,12 @@ export class PlaceholderRenderer implements SceneRenderer {
   private readonly atlas: CharacterAtlas<Texture> | null
   private readonly office: OfficeAtlas<Texture> | null
   private readonly partners: PartnerAtlas<Texture> | null
+  private readonly accessories: AccessoryAtlas<Texture> | null
 
   /**
    * atlas 가 null 이면(로드 실패) 캐릭터도 코드로 그린 도형으로 그린다. office 도 같다(업무 공간 가구).
    * partners 가 null 이면 파트너 몬스터는 팀 색의 작은 덩어리로 그린다.
+   * accessories 가 null 이면 외모 소품을 그리지 않는다(캐릭터는 그대로).
    */
   constructor(
     layers: PlaceholderLayers,
@@ -218,12 +230,14 @@ export class PlaceholderRenderer implements SceneRenderer {
     atlas: CharacterAtlas<Texture> | null = null,
     office: OfficeAtlas<Texture> | null = null,
     partners: PartnerAtlas<Texture> | null = null,
+    accessories: AccessoryAtlas<Texture> | null = null,
   ) {
     this.layers = layers
     this.dom = domOverlay
     this.atlas = atlas
     this.office = office
     this.partners = partners
+    this.accessories = accessories
     if (!warned && atlas === null) {
       warned = true
       console.warn(
@@ -405,7 +419,7 @@ export class PlaceholderRenderer implements SceneRenderer {
     return v
   }
 
-  createCharacter(variant: number): CharacterView {
+  createCharacter(variant: number, accessory: Accessory = 'none'): CharacterView {
     const v = new PlaceholderCharacterView(
       variant,
       this.layers.characters,
@@ -414,6 +428,8 @@ export class PlaceholderRenderer implements SceneRenderer {
       () => {
         this.views.delete(v)
       },
+      accessory,
+      this.accessories,
     )
     v.setScale(this.scale)
     v.setShredsInProp(this.shredsInProp)
@@ -934,6 +950,15 @@ class PlaceholderCharacterView implements CharacterView {
   private usingSprite = false
   /** 스프라이트로 실제 그리는 동작(대체 그림이면 대체 동작). 스프라이트 크기는 텍스처 크기 그대로(sofa_lie 32×16) */
   private drawnAnim: AnimName | null = null
+  /**
+   * 외모 소품 겹침 그림: 캐릭터 스프라이트 바로 위(이펙트·머리 위 표시 아래), 같은 앵커·오프셋.
+   * 캐릭터 프레임 이름의 char_{v}_ → acc_{kind}_ 프레임. 없으면 숨긴다.
+   */
+  private readonly accSprite = new Sprite()
+  private readonly accessory: Accessory
+  private readonly accAtlas: AccessoryAtlas<Texture> | null
+  /** 마지막으로 소품을 맞춘 캐릭터 프레임 이름(같으면 다시 찾지 않는다) */
+  private accFor: string | null = null
   private readonly ring = new Graphics()
   private readonly markG = new Graphics()
   private readonly fx = new Graphics()
@@ -961,6 +986,8 @@ class PlaceholderCharacterView implements CharacterView {
     dom: HTMLElement,
     atlas: CharacterAtlas<Texture> | null,
     onDestroy: () => void,
+    accessory: Accessory = 'none',
+    accAtlas: AccessoryAtlas<Texture> | null = null,
   ) {
     const colors = VARIANT_COLORS[variant % VARIANT_COLORS.length] ?? VARIANT_COLORS[0] ?? [0, 0]
     this.shirt = colors[0]
@@ -968,10 +995,20 @@ class PlaceholderCharacterView implements CharacterView {
     this.variant = variant
     this.atlas = atlas
     this.onDestroy = onDestroy
+    this.accessory = accessory
+    this.accAtlas = accAtlas
+    if (accessory !== 'none' && accAtlas === null && !warnedAccessory.has('sheet')) {
+      warnedAccessory.add('sheet')
+      console.warn(
+        '[claude-office] 소품 시트(accessories.json) 없음 — 외모 소품을 그리지 않습니다.',
+      )
+    }
     // 발끝 중앙 앵커(아틀라스 frame.anchor 와 같은 값). texture 교체 때 defaultAnchor 가 다시 읽히지 않으므로 직접 고정
     this.sprite.anchor.set(0.5, 1)
     this.sprite.visible = false
-    this.root.addChild(this.ring, this.body, this.sprite, this.fx, this.markG)
+    this.accSprite.anchor.set(0.5, 1)
+    this.accSprite.visible = false
+    this.root.addChild(this.ring, this.body, this.sprite, this.accSprite, this.fx, this.markG)
     layer.addChild(this.root)
 
     this.label = document.createElement('div')
@@ -1114,6 +1151,8 @@ class PlaceholderCharacterView implements CharacterView {
         this.sprite.y = resolved.dy
         this.body.clear()
         this.body.visible = false
+        // phone → phone_sit 처럼 같은 프레임 이름에 오프셋만 바뀌는 경우도 소품 위치를 다시 맞춘다
+        this.accFor = null
         this.updateSprite()
         return
       }
@@ -1127,6 +1166,9 @@ class PlaceholderCharacterView implements CharacterView {
     this.usingSprite = false
     this.drawnAnim = null
     this.sprite.visible = false
+    // 코드로 그린 몸에는 소품 그림이 맞지 않는다
+    this.accSprite.visible = false
+    this.accFor = null
     this.body.visible = true
     this.drawBody()
   }
@@ -1135,6 +1177,31 @@ class PlaceholderCharacterView implements CharacterView {
     if (this.atlas === null) return
     const tex = pickFrame(this.atlas, this.variant, this.anim, this.dir, this.elapsed)
     if (tex !== null && this.sprite.texture !== tex) this.sprite.texture = tex
+    if (this.accessory !== 'none') this.updateAccessory()
+  }
+
+  /** 소품을 지금 캐릭터 프레임에 맞춘다(같은 프레임·방향·뒤집기·오프셋). 프레임이 없으면 숨김 */
+  private updateAccessory(): void {
+    if (this.atlas === null) return
+    const name = pickFrameName(this.atlas, this.variant, this.anim, this.dir, this.elapsed)
+    if (name === this.accFor) return
+    this.accFor = name
+    const tex = pickAccessoryFrame(this.accAtlas, this.accessory, name)
+    if (tex === null) {
+      this.accSprite.visible = false
+      if (this.accAtlas !== null && name !== null && !warnedAccessory.has(this.accessory)) {
+        warnedAccessory.add(this.accessory)
+        console.warn(
+          `[claude-office] 소품 시트에 ${name} 에 맞는 ${this.accessory} 프레임 없음 — 그 프레임에서는 소품을 그리지 않습니다.`,
+        )
+      }
+      return
+    }
+    if (this.accSprite.texture !== tex) this.accSprite.texture = tex
+    this.accSprite.x = this.sprite.x
+    this.accSprite.y = this.sprite.y
+    this.accSprite.scale.copyFrom(this.sprite.scale)
+    this.accSprite.visible = true
   }
 
   /** 플레이스홀더 몸 그리기. 원점 = 발끝 중앙, 16×24 프레임 영역(-8..8, -24..0) */

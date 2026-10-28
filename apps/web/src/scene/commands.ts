@@ -1,3 +1,4 @@
+import type { Accessory } from './accessory'
 import type { AnimName, Effect, Mark } from './activityMap'
 import type { SpotId } from './layout'
 import type { PartnerKind, PartnerReaction } from './partner'
@@ -27,6 +28,8 @@ export type CharacterCommand =
       label: string
       say?: string | null
       partner?: PartnerKind
+      /** 외모 소품(직원 설정). 없으면 none */
+      accessory?: Accessory
     })
   /** 애니메이션 없이 즉시 배치(syncAll). 없으면 생성한다. 파트너도 주인 옆 자리에 바로 놓인다 */
   | (Base & {
@@ -34,6 +37,7 @@ export type CharacterCommand =
       variant: number
       label: string
       partner?: PartnerKind
+      accessory?: Accessory
       spot: SpotId
       slot: number
       anim: AnimName

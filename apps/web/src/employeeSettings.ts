@@ -1,5 +1,5 @@
 /*
- * 직원 설정(기획서 4절 "직원 설정") — 팀장·팀원 종류별 이름·팀·옷/머리 색.
+ * 직원 설정(기획서 4절 "직원 설정"·"외모 소품") — 팀장·팀원 종류별 이름·팀·옷/머리 색·소품.
  * 뷰어별 편의 설정이라 localStorage 에만 둔다(서버 상태 아님). PixiJS·React 비의존(테스트 대상).
  *
  * - 저장 키 `claude-office.employees`, 구조 버전 필드 `v`. 버전이 다르거나 깨진 값이면 기본값.
@@ -8,6 +8,7 @@
  */
 
 import { type AgentState, MAIN_AGENT_ID, type SessionState } from '@claude-office/shared'
+import { type Accessory, type AccessoryKind, isAccessory } from './scene/accessory'
 import { DEFAULT_TEAM_CONFIG, TEAM_IDS, type TeamConfig, type TeamId } from './scene/teams'
 import { FIXED_VARIANTS, VARIANT_COUNT, variantFor } from './scene/variant'
 
@@ -19,12 +20,16 @@ export const NAME_MAX = 20
 export interface BossSettings {
   readonly name?: string
   readonly variant?: number
+  /** 외모 소품. 없으면(옛 저장값 포함) none */
+  readonly accessory?: AccessoryKind
 }
 
 export interface TypeSettings {
   readonly name?: string
   readonly team?: TeamId
   readonly variant?: number
+  /** 외모 소품. 없으면(옛 저장값 포함) none */
+  readonly accessory?: AccessoryKind
 }
 
 export interface EmployeeSettings {
@@ -64,11 +69,21 @@ function cleanTeam(x: unknown): TeamId | undefined {
     : undefined
 }
 
+/** 모르는 값·none 은 칸을 비운다(= none). 구조 버전은 그대로 — 소품 칸이 없는 옛 저장값도 읽힌다 */
+function cleanAccessory(x: unknown): AccessoryKind | undefined {
+  return isAccessory(x) && x !== 'none' ? x : undefined
+}
+
 function cleanBoss(x: unknown): BossSettings {
   if (!isObj(x)) return {}
   const name = cleanName(x.name)
   const variant = cleanVariant(x.variant)
-  return { ...(name !== undefined ? { name } : {}), ...(variant !== undefined ? { variant } : {}) }
+  const accessory = cleanAccessory(x.accessory)
+  return {
+    ...(name !== undefined ? { name } : {}),
+    ...(variant !== undefined ? { variant } : {}),
+    ...(accessory !== undefined ? { accessory } : {}),
+  }
 }
 
 function cleanType(x: unknown): TypeSettings {
@@ -76,10 +91,12 @@ function cleanType(x: unknown): TypeSettings {
   const name = cleanName(x.name)
   const team = cleanTeam(x.team)
   const variant = cleanVariant(x.variant)
+  const accessory = cleanAccessory(x.accessory)
   return {
     ...(name !== undefined ? { name } : {}),
     ...(team !== undefined ? { team } : {}),
     ...(variant !== undefined ? { variant } : {}),
+    ...(accessory !== undefined ? { accessory } : {}),
   }
 }
 
@@ -122,6 +139,16 @@ export function variantOf(
 ): number {
   if (agentId === MAIN_AGENT_ID) return s.boss.variant ?? variantFor(agentId, agentType)
   return typeSettings(s, agentType).variant ?? variantFor(agentId, agentType)
+}
+
+/** 외모 소품: 사용자가 고른 값, 없으면 none */
+export function accessoryOf(
+  agentId: string,
+  agentType: string | undefined,
+  s: EmployeeSettings,
+): Accessory {
+  if (agentId === MAIN_AGENT_ID) return s.boss.accessory ?? 'none'
+  return typeSettings(s, agentType).accessory ?? 'none'
 }
 
 /** 번호 없는 이름: 사용자가 정한 이름, 없으면 main / 종류 이름 / id 앞 8자 */

@@ -17,6 +17,29 @@ export const DEFAULT_FRAME_MS = 180
 export interface CharacterAtlas<T> {
   readonly animations: Readonly<Record<string, readonly T[] | undefined>>
   readonly frameMs: Readonly<Record<string, number | undefined>>
+  /**
+   * animations 와 같은 키의 프레임 "이름" 목록(아틀라스 JSON 의 animations 그대로).
+   * 외모 소품이 캐릭터 프레임 이름으로 자기 프레임을 찾는다(accessory.ts). 없으면 소품을 그리지 않는다.
+   */
+  readonly frameNames?: Readonly<Record<string, readonly string[] | undefined>>
+}
+
+/** 경과 시간에 맞는 캐릭터 프레임 "이름"(pickFrame 과 같은 프레임). frameNames 가 없거나 키가 없으면 null */
+export function pickFrameName(
+  atlas: CharacterAtlas<unknown>,
+  variant: number,
+  anim: AnimName,
+  dir: Dir,
+  elapsedMs: number,
+): string | null {
+  if (atlas.frameNames === undefined) return null
+  return pickFrame(
+    { animations: atlas.frameNames, frameMs: atlas.frameMs },
+    variant,
+    anim,
+    dir,
+    elapsedMs,
+  )
 }
 
 export function animKey(variant: number, anim: AnimName, dir: Dir): string {

@@ -5,6 +5,7 @@
  * 언어 선택은 뷰어별 편의 설정이므로 localStorage 에만 둔다(서버 상태 아님).
  */
 
+import type { Accessory } from './scene/accessory'
 import type { TeamId } from './scene/teams'
 
 export type Lang = 'ko' | 'en'
@@ -135,6 +136,13 @@ export const UI = {
     empReset: '기본값으로',
     empClose: '닫기',
     empHint: '이름을 비우면 기본 이름(main / 종류 이름). 브라우저에 저장됩니다.',
+    empAccessory: '소품',
+    accNone: '없음',
+    accGlasses: '동그란 안경',
+    accSunglasses: '선글라스',
+    accCap: '야구 모자',
+    accHeadphones: '헤드폰',
+    accRibbon: '리본',
     locale: 'ko-KR',
   },
   en: {
@@ -189,6 +197,13 @@ export const UI = {
     empReset: 'Reset to defaults',
     empClose: 'Close',
     empHint: 'Leave a name empty for the default (main / type name). Saved in this browser.',
+    empAccessory: 'Accessory',
+    accNone: 'None',
+    accGlasses: 'Round glasses',
+    accSunglasses: 'Sunglasses',
+    accCap: 'Baseball cap',
+    accHeadphones: 'Headphones',
+    accRibbon: 'Ribbon',
     locale: 'en-US',
   },
 } as const satisfies Record<Lang, Record<string, string>>
@@ -209,6 +224,20 @@ const TEAM_KEYS: Readonly<Record<TeamId, UiKey>> = {
 /** 팀 간판 글자: "조사팀" / "Research" (기획서 3절 팀 구역) */
 export function teamName(team: TeamId, lang: Lang = getLang()): string {
   return t(TEAM_KEYS[team], lang)
+}
+
+const ACCESSORY_KEYS: Readonly<Record<Accessory, UiKey>> = {
+  none: 'accNone',
+  glasses: 'accGlasses',
+  sunglasses: 'accSunglasses',
+  cap: 'accCap',
+  headphones: 'accHeadphones',
+  ribbon: 'accRibbon',
+}
+
+/** 외모 소품 이름: "야구 모자" / "Baseball cap" (기획서 4절 외모 소품) */
+export function accessoryName(a: Accessory, lang: Lang = getLang()): string {
+  return t(ACCESSORY_KEYS[a], lang)
 }
 
 /** 층 탭 이름: "1층 claude-office" / "1F claude-office" */

@@ -225,9 +225,19 @@ export interface ActionDef {
   /** true 면 방향 무관 행동: 키는 `_down` 하나만 만든다(pixel-art-pipeline 4절) */
   downOnly?: boolean
   frames: (dir: DrawDir) => Pose[]
-  /** 지정하면 frames 대신 이 함수로 기호 프레임을 만든다(프레임 크기 자유, 앵커는 언제나 0.5, 1) */
-  render?: (dir: DrawDir) => KeyFrame[]
+  /**
+   * 지정하면 frames 대신 이 함수로 기호 프레임을 만든다(프레임 크기 자유, 앵커는 언제나 0.5, 1).
+   * extra 를 받으면 poseLayers 에 그대로 넘긴다(외모 소품 오버레이가 같은 자세·변환을 따르게)
+   */
+  render?: (dir: DrawDir, extra?: HeadExtra) => KeyFrame[]
 }
+
+/**
+ * 머리 바로 뒤(팔·앞 소품보다 아래)에 끼워 그릴 레이어 — 외모 소품 오버레이(accessorySheet.ts)용.
+ * (x, y) = 그 프레임의 머리 그리드 왼쪽 위(프레임 좌표, 기본 자세에서 (2, 1)). dir 은 그리는 방향.
+ * 캐릭터 시트 자체는 이것 없이 만든다.
+ */
+export type HeadExtra = (dir: DrawDir, x: number, y: number) => Layer[]
 
 // ---------------------------------------------------------------------------
 // 소파 위 자세 (furn_sofa, rooms.ts sofa()). 소파는 아래 벽에 붙어 방 쪽(위)을 향하므로 화면에서는
@@ -274,20 +284,25 @@ const SOFA_ARMS: Layer[] = [
   ),
 ]
 
-function renderSofaSit(): KeyFrame[] {
+function renderSofaSit(_dir: DrawDir, extra?: HeadExtra): KeyFrame[] {
   // 숨쉬기: 머리만 1px 내려간다(팔은 등받이에 걸쳐 고정)
   return [0, 1].map((hy, i) =>
     compose(
-      poseLayers('up', {
-        legs: 'tuck',
-        dy: SOFA_SIT_DY,
-        hy,
-        arms: [],
-        frontFixed: [backrestStrip(FRAME_W, FRAME_H), ...SOFA_ARMS],
-      }),
+      poseLayers(
+        'up',
+        {
+          legs: 'tuck',
+          dy: SOFA_SIT_DY,
+          hy,
+          arms: [],
+          frontFixed: [backrestStrip(FRAME_W, FRAME_H), ...SOFA_ARMS],
+        },
+        extra,
+      ),
       FRAME_W,
       FRAME_H,
       `sofa_sit_${i}`,
+      extra !== undefined,
     ),
   )
 }
@@ -304,22 +319,27 @@ function rotateCcw(kf: KeyFrame): KeyFrame {
   )
 }
 
-function renderSofaLie(): KeyFrame[] {
+function renderSofaLie(_dir: DrawDir, extra?: HeadExtra): KeyFrame[] {
   const { lieW, lieH } = SOFA_SEAT
   return [0, 1].map((lift, i) => {
     // 정면 자세(눈 감음, 두 손은 배 위)로 그린 뒤 눕힌다. lift = 숨 들이쉼(상체가 화면 위로 1px)
-    const [legLayer, ...upper] = poseLayers('down', {
-      expr: 'closed',
-      arms: [
-        merge(rect(4, 13, 1, 2, 'c'), rect(5, 15, 2, 1, 's')),
-        merge(rect(11, 13, 1, 2, 'C'), rect(9, 15, 2, 1, 's')),
-      ],
-    })
+    const [legLayer, ...upper] = poseLayers(
+      'down',
+      {
+        expr: 'closed',
+        arms: [
+          merge(rect(4, 13, 1, 2, 'c'), rect(5, 15, 2, 1, 's')),
+          merge(rect(11, 13, 1, 2, 'C'), rect(9, 15, 2, 1, 's')),
+        ],
+      },
+      extra,
+    )
     const standing = compose(
       [legLayer as Layer, ...upper.map((l) => shift(l, lift, 0))],
       FRAME_W,
       FRAME_H,
       `sofa_lie_${i}`,
+      extra !== undefined,
     )
     // 눕히면 열 = 원래 y. 허벅지(y17, 바지만 있는 줄)를 LIE_LEG_EXTRA 번 더 넣어 다리를 늘린다
     const body = rotateCcw(standing).map((row) => [
@@ -343,11 +363,19 @@ function renderSofaLie(): KeyFrame[] {
 }
 
 /** 행동 하나의 기호 프레임(그 방향, 그리는 방향 기준 — right 는 build 에서 left 반전) */
-export function actionFrames(action: ActionDef, dir: DrawDir): KeyFrame[] {
-  if (action.render) return action.render(dir)
+export function actionFrames(action: ActionDef, dir: DrawDir, extra?: HeadExtra): KeyFrame[] {
+  if (action.render) return action.render(dir, extra)
   return action
     .frames(dir)
-    .map((p, i) => compose(poseLayers(dir, p), FRAME_W, FRAME_H, `${action.name}_${dir}_${i}`))
+    .map((p, i) =>
+      compose(
+        poseLayers(dir, p, extra),
+        FRAME_W,
+        FRAME_H,
+        `${action.name}_${dir}_${i}`,
+        extra !== undefined,
+      ),
+    )
 }
 
 /** 아틀라스에 만들 방향 */
@@ -774,16 +802,18 @@ export const ACTIONS: readonly ActionDef[] = [
 ]
 
 /** 한 포즈 → 그리기 순서대로 정렬된 레이어 */
-export function poseLayers(dir: DrawDir, pose: Pose): Layer[] {
+export function poseLayers(dir: DrawDir, pose: Pose, extra?: HeadExtra): Layer[] {
   const dy = pose.dy ?? 0
   const legKind = pose.legs ?? 'stand'
   const out: Layer[] = []
   for (const l of pose.back ?? []) out.push(shift(l, 0, dy))
   out.push(legs(dir, legKind, 16 + dy))
   out.push(shift(torso(dir), 0, dy))
-  out.push(
-    head(dir, dir === 'up' ? 'open' : (pose.expr ?? 'open'), pose.hx ?? 0, dy + (pose.hy ?? 0)),
-  )
+  const hx = pose.hx ?? 0
+  const hy = dy + (pose.hy ?? 0)
+  out.push(head(dir, dir === 'up' ? 'open' : (pose.expr ?? 'open'), hx, hy))
+  // head() 와 같은 원점(2 + hx, 1 + hy)
+  if (extra) out.push(...extra(dir, 2 + hx, 1 + hy))
   for (const l of pose.arms ?? restArms(dir)) out.push(shift(l, 0, dy))
   for (const l of pose.front ?? []) out.push(shift(l, 0, dy))
   for (const l of pose.frontFixed ?? []) out.push(l)

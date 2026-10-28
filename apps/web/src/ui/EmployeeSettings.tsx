@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
+  accessoryOf,
   baseName,
   type EmployeeSettings,
   getEmployeeSettings,
@@ -13,7 +14,15 @@ import {
   updateType,
   variantOf,
 } from '../employeeSettings'
-import { type Lang, t, teamName } from '../i18n'
+import { accessoryName, type Lang, t, teamName } from '../i18n'
+import {
+  ACCESSORIES,
+  ACCESSORY_ATLAS_URL,
+  ACCESSORY_KINDS,
+  type Accessory,
+  type AccessoryKind,
+  accessoryFrameName,
+} from '../scene/accessory'
 import { CHARACTER_ATLAS_URL } from '../scene/render/characterSheet'
 import { VARIANT_COLORS } from '../scene/render/PlaceholderRenderer'
 import { TEAM_IDS, type TeamId, teamOf } from '../scene/teams'
@@ -28,6 +37,7 @@ export function useEmployees(): EmployeeSettings {
 
 // ---------------------------------------------------------------------------
 // 미리보기: 캐릭터 아틀라스의 char_{v}_idle_stand_down_0 (실패하면 색 칩)
+//   + 소품 시트의 acc_{kind}_idle_stand_down_0 을 같은 자리에 겹침(없으면 소품 없이)
 // ---------------------------------------------------------------------------
 
 interface Rect {
@@ -36,14 +46,26 @@ interface Rect {
   w: number
   h: number
 }
-interface PreviewAtlas {
+/** 시트 안 자리 + 원래 프레임 안 위치(잘라낸 프레임이면 spriteSourceSize 의 x·y) */
+interface PreviewFrame extends Rect {
+  ox: number
+  oy: number
+}
+interface PreviewSheet {
   image: string
   size: { w: number; h: number }
-  frames: Map<number, Rect>
+  frames: Map<string, PreviewFrame>
+}
+interface PreviewAtlas {
+  chars: PreviewSheet | null
+  acc: PreviewSheet | null
 }
 
 const PREVIEW_SCALE = 2
-let atlasPromise: Promise<PreviewAtlas | null> | null = null
+const PREVIEW_POSE = 'idle_stand_down_0'
+const charPreviewName = (v: number) => `char_${v}_${PREVIEW_POSE}`
+const accPreviewName = (k: AccessoryKind) => accessoryFrameName(charPreviewName(0), k) ?? ''
+const sheetPromises = new Map<string, Promise<PreviewSheet | null>>()
 
 function isRect(x: unknown): x is Rect {
   if (typeof x !== 'object' || x === null) return false
@@ -51,13 +73,18 @@ function isRect(x: unknown): x is Rect {
   return ['x', 'y', 'w', 'h'].every((k) => typeof r[k] === 'number')
 }
 
-function loadPreviewAtlas(): Promise<PreviewAtlas | null> {
-  if (atlasPromise !== null) return atlasPromise
+/** 아틀라스 JSON 에서 미리보기에 쓸 프레임만 읽는다. 없거나 형식이 틀리면 null */
+function loadPreviewSheet(
+  atlasUrl: string,
+  names: readonly string[],
+  what: string,
+): Promise<PreviewSheet | null> {
+  const cached = sheetPromises.get(atlasUrl)
+  if (cached !== undefined) return cached
   const base = import.meta.env.BASE_URL
-  const url = `${base}${CHARACTER_ATLAS_URL}`
-  atlasPromise = fetch(url)
+  const p = fetch(`${base}${atlasUrl}`)
     .then((r) => (r.ok ? r.json() : null))
-    .then((json: unknown): PreviewAtlas | null => {
+    .then((json: unknown): PreviewSheet | null => {
       if (typeof json !== 'object' || json === null) return null
       const { frames, meta } = json as { frames?: Record<string, unknown>; meta?: unknown }
       const m = meta as { image?: unknown; size?: unknown } | undefined
@@ -69,26 +96,41 @@ function loadPreviewAtlas(): Promise<PreviewAtlas | null> {
         typeof size.h !== 'number'
       )
         return null
-      const out = new Map<number, Rect>()
-      for (let v = 0; v < VARIANT_COUNT; v++) {
-        const f = (frames[`char_${v}_idle_stand_down_0`] as { frame?: unknown } | undefined)?.frame
-        if (isRect(f)) out.set(v, f)
+      const out = new Map<string, PreviewFrame>()
+      for (const n of names) {
+        if (!Object.hasOwn(frames, n)) continue
+        const fr = frames[n] as { frame?: unknown; spriteSourceSize?: unknown } | undefined
+        if (!isRect(fr?.frame)) continue
+        const src = isRect(fr.spriteSourceSize) ? fr.spriteSourceSize : { x: 0, y: 0 }
+        out.set(n, { ...fr.frame, ox: src.x, oy: src.y })
       }
-      const dir = CHARACTER_ATLAS_URL.slice(0, CHARACTER_ATLAS_URL.lastIndexOf('/') + 1)
+      const dir = atlasUrl.slice(0, atlasUrl.lastIndexOf('/') + 1)
       return { image: `${base}${dir}${m.image}`, size: { w: size.w, h: size.h }, frames: out }
     })
     .catch((err: unknown) => {
-      console.warn(
-        '[claude-office] 직원 설정 미리보기용 캐릭터 아틀라스를 못 읽음 — 색 칩으로',
-        err,
-      )
+      console.warn(`[claude-office] 직원 설정 미리보기용 ${what}을 못 읽음`, err)
       return null
     })
-  return atlasPromise
+  sheetPromises.set(atlasUrl, p)
+  return p
 }
 
-function usePreviewAtlas(): PreviewAtlas | null {
-  const [atlas, setAtlas] = useState<PreviewAtlas | null>(null)
+function loadPreviewAtlas(): Promise<PreviewAtlas> {
+  const chars = loadPreviewSheet(
+    CHARACTER_ATLAS_URL,
+    Array.from({ length: VARIANT_COUNT }, (_, v) => charPreviewName(v)),
+    '캐릭터 아틀라스(색 칩으로 대신)',
+  )
+  const acc = loadPreviewSheet(
+    ACCESSORY_ATLAS_URL,
+    ACCESSORY_KINDS.map(accPreviewName),
+    '소품 시트(소품 없이 보임)',
+  )
+  return Promise.all([chars, acc]).then(([c, a]) => ({ chars: c, acc: a }))
+}
+
+function usePreviewAtlas(): PreviewAtlas {
+  const [atlas, setAtlas] = useState<PreviewAtlas>({ chars: null, acc: null })
   useEffect(() => {
     let live = true
     void loadPreviewAtlas().then((a) => {
@@ -103,9 +145,22 @@ function usePreviewAtlas(): PreviewAtlas | null {
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`
 
-function VariantPreview({ variant, atlas }: { variant: number; atlas: PreviewAtlas | null }) {
-  const f = atlas?.frames.get(variant)
-  if (atlas === null || f === undefined) {
+function sheetStyle(sheet: PreviewSheet, f: PreviewFrame) {
+  const s = PREVIEW_SCALE
+  return {
+    width: f.w * s,
+    height: f.h * s,
+    backgroundImage: `url(${sheet.image})`,
+    backgroundSize: `${sheet.size.w * s}px ${sheet.size.h * s}px`,
+    backgroundPosition: `${-f.x * s}px ${-f.y * s}px`,
+  }
+}
+
+function VariantPreview(props: { variant: number; accessory: Accessory; atlas: PreviewAtlas }) {
+  const { variant, accessory, atlas } = props
+  const sheet = atlas.chars
+  const f = sheet?.frames.get(charPreviewName(variant))
+  if (sheet === null || f === undefined) {
     const [shirt, hair] = VARIANT_COLORS[variant] ?? [0, 0]
     return (
       <span className="emp-chip">
@@ -114,18 +169,18 @@ function VariantPreview({ variant, atlas }: { variant: number; atlas: PreviewAtl
       </span>
     )
   }
+  const acc = atlas.acc
+  const af = accessory === 'none' ? undefined : acc?.frames.get(accPreviewName(accessory))
   const s = PREVIEW_SCALE
   return (
-    <span
-      className="emp-sprite"
-      style={{
-        width: f.w * s,
-        height: f.h * s,
-        backgroundImage: `url(${atlas.image})`,
-        backgroundSize: `${atlas.size.w * s}px ${atlas.size.h * s}px`,
-        backgroundPosition: `${-f.x * s}px ${-f.y * s}px`,
-      }}
-    />
+    <span className="emp-sprite" style={sheetStyle(sheet, f)}>
+      {acc !== null && af !== undefined && (
+        <span
+          className="emp-acc"
+          style={{ ...sheetStyle(acc, af), left: (af.ox - f.ox) * s, top: (af.oy - f.oy) * s }}
+        />
+      )}
+    </span>
   )
 }
 
@@ -166,11 +221,12 @@ function NameInput(props: {
 
 function VariantPicker(props: {
   value: number
-  atlas: PreviewAtlas | null
+  accessory: Accessory
+  atlas: PreviewAtlas
   lang: Lang
   onPick: (v: number) => void
 }) {
-  const { value, atlas, lang, onPick } = props
+  const { value, accessory, atlas, lang, onPick } = props
   return (
     <fieldset className="emp-variants" aria-label={t('empLook', lang)}>
       {Array.from({ length: VARIANT_COUNT }, (_, v) => (
@@ -183,7 +239,7 @@ function VariantPicker(props: {
           title={t('empLookN', lang).replace('{n}', String(v + 1))}
           onClick={() => onPick(v)}
         >
-          <VariantPreview variant={v} atlas={atlas} />
+          <VariantPreview variant={v} accessory={accessory} atlas={atlas} />
         </button>
       ))}
     </fieldset>
@@ -194,7 +250,7 @@ function Row(props: {
   kind: string
   agentType: string | null
   settings: EmployeeSettings
-  atlas: PreviewAtlas | null
+  atlas: PreviewAtlas
   lang: Lang
 }) {
   const { kind, agentType, settings, atlas, lang } = props
@@ -204,6 +260,7 @@ function Row(props: {
   const type = agentType ?? undefined
   const defaultName = baseName(id, type, { ...settings, boss: {}, types: {} })
   const variant = variantOf(id, type, settings)
+  const accessory = accessoryOf(id, type, settings)
   const team: TeamId | null = isBoss ? null : teamOf(agentType, toTeamConfig(settings))
   const patch = (p: Record<string, unknown>) =>
     agentType === null ? updateBoss(p) : updateType(agentType, p)
@@ -241,10 +298,26 @@ function Row(props: {
       <td>
         <VariantPicker
           value={variant}
+          accessory={accessory}
           atlas={atlas}
           lang={lang}
           onPick={(v) => patch({ variant: v })}
         />
+      </td>
+      <td>
+        <select
+          aria-label={`${kind} ${t('empAccessory', lang)}`}
+          value={accessory}
+          onChange={(e) =>
+            patch({ accessory: e.target.value === 'none' ? undefined : e.target.value })
+          }
+        >
+          {ACCESSORIES.map((a) => (
+            <option key={a} value={a}>
+              {accessoryName(a, lang)}
+            </option>
+          ))}
+        </select>
       </td>
     </tr>
   )
@@ -298,6 +371,7 @@ function EmployeeDialog({ onClose }: { onClose: () => void }) {
               <th scope="col">{t('empName', lang)}</th>
               <th scope="col">{t('empTeam', lang)}</th>
               <th scope="col">{t('empLook', lang)}</th>
+              <th scope="col">{t('empAccessory', lang)}</th>
             </tr>
           </thead>
           <tbody>

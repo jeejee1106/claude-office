@@ -1,11 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import { type AccessoryAtlas, packAccessories } from './accessorySheet'
 import { decodePng, PixelImage } from './canvas'
 import type { OfficeAtlas } from './officeSheet'
 import { VARIANT_COUNT } from './palette'
 import { type PartnerAtlas, packPartners, petAnimDirs } from './partnerSheet'
 import { OUTPUT_DIR, REPO_ROOT } from './paths'
 import { DOWN_ONLY_ACTIONS, type PixiAtlas } from './sheet'
+import { ACC_KINDS } from './sprites/accessory'
 import { ALL_DIRS } from './sprites/character'
 import { buildOfficeFrames, OFFICE_ANIMATIONS } from './sprites/office'
 import { PET_ANIMS, PET_KINDS } from './sprites/partner'
@@ -169,6 +171,50 @@ for (const kind of PET_KINDS)
       }
     }
 
+// ---------------------------------------------------------------------------
+// accessories 시트: 디스크 = 스크립트, 그리고 char_0_* 프레임·애니메이션마다
+// acc_{kind}_* 가 같은 크기·같은 앵커·같은 프레임 수로 있는지
+// ---------------------------------------------------------------------------
+const accAtlas = JSON.parse(
+  readFileSync(resolve(OUTPUT_DIR, 'accessories.json'), 'utf8'),
+) as AccessoryAtlas
+const accSheet = decodePng(readFileSync(resolve(OUTPUT_DIR, accAtlas.meta.image)))
+const accExpected = packAccessories()
+if (!accSheet.equals(accExpected.image))
+  errors.push('accessories: PNG differs from the script (run build)')
+if (JSON.stringify(accAtlas) !== JSON.stringify(accExpected.atlas))
+  errors.push('accessories: JSON differs from the script (run build)')
+const accBad = offPalettePixels(accSheet)
+if (accBad.length) errors.push(`accessories: off-palette pixels: ${accBad.join(', ')}`)
+if (JSON.stringify(accAtlas.meta.frameMs) !== JSON.stringify(atlas.meta.frameMs))
+  errors.push('accessories: meta.frameMs differs from characters.json')
+let accChecked = 0
+for (const kind of ACC_KINDS) {
+  for (const [name, cf] of Object.entries(atlas.frames)) {
+    if (!name.startsWith('char_0_')) continue
+    const an = name.replace(/^char_0_/, `acc_${kind}_`)
+    const af = accAtlas.frames[an]
+    if (!af) {
+      errors.push(`accessories: missing ${an}`)
+      continue
+    }
+    if (af.frame.w !== cf.frame.w || af.frame.h !== cf.frame.h)
+      errors.push(
+        `accessories: ${an} is ${af.frame.w}x${af.frame.h}, ${name} is ${cf.frame.w}x${cf.frame.h}`,
+      )
+    if (af.anchor.x !== cf.anchor.x || af.anchor.y !== cf.anchor.y)
+      errors.push(`accessories: ${an} anchor differs from ${name}`)
+    accChecked++
+  }
+  for (const [key, names] of Object.entries(atlas.animations)) {
+    if (!key.startsWith('char_0_')) continue
+    const ak = key.replace(/^char_0_/, `acc_${kind}_`)
+    const want = names.map((n) => n.replace(/^char_0_/, `acc_${kind}_`)).join()
+    if (accAtlas.animations[ak]?.join() !== want)
+      errors.push(`accessories: animation ${ak} does not mirror ${key}`)
+  }
+}
+
 // 씬 코드가 이름으로 부르는 furn_/tile_/ui_/pet_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
 const warnings: string[] = []
 const known = new Set([
@@ -202,5 +248,6 @@ console.log(
     `${sceneVariants} variants, ${checked} frames checked; office ${expected.length} frames + ` +
     `${Object.keys(OFFICE_ANIMATIONS).length} animations match the script; ` +
     `partners ${PET_KINDS.length} kinds, ${petChecked} frames match the script; ` +
+    `accessories ${ACC_KINDS.length} kinds, ${accChecked} overlay frames match char_0 size/anchor + script; ` +
     '0 off-palette pixels',
 )
