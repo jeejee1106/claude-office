@@ -314,6 +314,39 @@ body {
   background: #9ec5ff;
 }
 
+/* 오늘 작업량 (기획서 7절) — 픽셀 톤의 작은 숫자 칸 4개 */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+}
+.stat-cell {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  background: var(--panel-2);
+  border: 2px solid #0b0d1a;
+  box-shadow: 2px 2px 0 #0b0d1a;
+  min-width: 0;
+}
+.stat-cell dt {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.stat-cell dd {
+  margin: 0;
+  font: 700 16px / 1 var(--pixel-font);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 .timeline {
   flex: 1;
   overflow-y: auto;

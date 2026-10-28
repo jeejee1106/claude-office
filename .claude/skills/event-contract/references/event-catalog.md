@@ -69,9 +69,32 @@
 
 | type | 페이로드 | 시점 |
 | --- | --- | --- |
-| `snapshot` | `state: OfficeState`, `recent: OfficeEvent[]`(오래된→최신, ≤500, **항목별 검증 — 모르는 kind 는 그 항목만 빠짐**, 2026-10-24), `ts`(서버 시각) | 접속 직후 1회 |
+| `snapshot` | `state: OfficeState`, `recent: OfficeEvent[]`(오래된→최신, ≤500, **항목별 검증 — 모르는 kind 는 그 항목만 빠짐**, 2026-10-24), `ts`(서버 시각), `stats?: DailyStats`(2026-10-28, 형식이 틀리면 이 필드만 undefined) | 접속 직후 1회 |
 | `event` | `event: OfficeEvent` | 이벤트 수신마다 |
 | `heartbeat` | `ts` | 주기적 (연결 확인) |
+| `stats` | `stats: DailyStats` (그날 전체, 통째로 교체) | 숫자가 바뀐 `event` 직후, 자정 초기화 때 (2026-10-28) |
+
+## 오늘 작업량 (shared `stats.ts`, 2026-10-28)
+
+```
+DailyStats  = { day: 'YYYY-MM-DD'(서버 현지 날짜), floors: Record<FloorKey, DailyCounts> }
+DailyCounts = { filesEdited, commands, teammates, toolUses }   // 0 이상 정수, 이상한 값·빠진 값은 0
+FloorKey    = 'p:<project>' | 's:<sessionId>'                  // floorKeyFor(project, sessionId)
+```
+
+서버 hub 만 `DailyStatsCounter`로 센다(web 은 세지 않고 받은 숫자만 보여 준다). "같은 것" 판정 키는 카운터 안(서버 메모리)에만 있고 `toWire()`는 숫자만 낸다.
+
+| 숫자 | 세는 이벤트 | 같은 것 판정 |
+| --- | --- | --- |
+| `toolUses` | 모든 `tool.end`(성공·실패, 서브에이전트 포함) | — |
+| `commands` | `tool.end` 중 `tool.name === 'Bash'`(성공·실패) | — |
+| `filesEdited` | `tool.end` 중 `status: ok` + category `edit`/`write` + `target` 있음 | 층 안에서 `target`(basename) 같으면 1번. 다른 폴더의 같은 이름 파일도 1번(계약상 한계) |
+| `teammates` | `agent.spawn` 중 `agentId !== 'main'` | 층 안에서 (sessionId, agentId) |
+
+- 층: `event.project` → 없으면 state 의 세션 project → 없으면 `s:<sessionId>`. 같은 층의 여러 세션은 합산.
+- 날짜: 이벤트 ts 가 아니라 서버 시각. `count()`·`rollover()`가 날짜가 바뀐 걸 보면 모두 0 으로. hub sweep(5초)에서 `rollover`.
+- 리플레이(`--replay`) 이벤트는 실제 이벤트와 똑같이 센다(같은 project 면 같은 층). `agent.idle` 등 서버 합성 이벤트는 세는 종류가 아니다.
+- 서버를 다시 켜면 0 부터(메모리 전용).
 
 ## OfficeState
 

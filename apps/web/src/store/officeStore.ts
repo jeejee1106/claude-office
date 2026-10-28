@@ -1,5 +1,9 @@
 import {
   createInitialState,
+  type DailyCounts,
+  type DailyStats,
+  EMPTY_DAILY_COUNTS,
+  localDayKey,
   type OfficeEvent,
   type OfficeState,
   reduce,
@@ -43,6 +47,25 @@ export interface StoreState {
   /** 현재 층이 아닌 층의 새 활동 횟수 — 탭 깜빡임 트리거 */
   floorPulse: Readonly<Record<FloorKey, number>>
   highlightAgentId: string | null
+  /**
+   * 오늘 작업량(서버가 센 숫자, 기획서 7절). null = 서버가 보내지 않음(구버전 서버) → 칸을 숨긴다.
+   * snapshot.stats 로 채우고 stats 메시지로 통째로 교체한다. web 은 세지 않는다.
+   */
+  dailyStats: DailyStats | null
+}
+
+/**
+ * 지금 층의 오늘 숫자. stats 가 없으면(구버전 서버) null.
+ * 그 층 숫자가 없거나, stats 의 날짜가 오늘(이 컴퓨터 현지)이 아니면 모두 0.
+ */
+export function dailyCountsOn(
+  stats: DailyStats | null,
+  floor: FloorKey | null,
+  nowMs: number = Date.now(),
+): DailyCounts | null {
+  if (stats === null) return null
+  if (floor === null || stats.day !== localDayKey(nowMs)) return EMPTY_DAILY_COUNTS
+  return stats.floors[floor] ?? EMPTY_DAILY_COUNTS
 }
 
 export interface SceneListener {
@@ -87,6 +110,7 @@ export function createOfficeStore(): OfficeStore {
     floorOrder: [],
     floorPulse: {},
     highlightAgentId: null,
+    dailyStats: null,
   }
   /** 서버 시각 - 클라이언트 시각 (ms). 리렌더가 필요 없는 값이라 state 밖에 둔다 */
   let serverOffsetMs = 0
@@ -129,9 +153,18 @@ export function createOfficeStore(): OfficeStore {
         case 'snapshot':
           serverOffsetMs = offsetFrom(msg.ts, clientNow)
           set(
-            withFloors({ ...state, office: msg.state, recent: msg.recent.slice(-RECENT_UI_LIMIT) }),
+            withFloors({
+              ...state,
+              office: msg.state,
+              recent: msg.recent.slice(-RECENT_UI_LIMIT),
+              dailyStats: msg.stats ?? null,
+            }),
           )
           for (const l of scene) l.onSnapshot(state)
+          break
+        case 'stats':
+          // 씬과 무관 — 리렌더만(씬 리스너는 부르지 않는다)
+          set({ ...state, dailyStats: msg.stats })
           break
         case 'event': {
           const e = msg.event

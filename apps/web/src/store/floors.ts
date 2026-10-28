@@ -1,4 +1,4 @@
-import type { OfficeState, SessionState } from '@claude-office/shared'
+import { floorKeyFor, type OfficeState, type SessionState } from '@claude-office/shared'
 
 /*
  * 층(여러 프로젝트) 계산 — 순수 함수, PixiJS·React 비의존 (기획서 7절 "층(여러 프로젝트)").
@@ -44,8 +44,9 @@ const time = (iso: string | undefined): number => {
 
 export const shortId = (id: string): string => (id.length > 8 ? id.slice(0, 8) : id)
 
+/** 서버 "오늘 작업량"의 층 키와 같아야 하므로 shared floorKeyFor 를 그대로 쓴다 */
 export function floorKeyOf(s: SessionState): FloorKey {
-  return s.project !== undefined && s.project !== '' ? `p:${s.project}` : `s:${s.id}`
+  return floorKeyFor(s.project, s.id)
 }
 
 export function floorNameOf(s: SessionState): string {
