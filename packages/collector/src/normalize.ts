@@ -22,6 +22,7 @@ import { baseName, toolTarget, truncate } from './target'
  *   SubagentStart       → agent.spawn    (agentId = agent_id, agentType = agent_type)
  *   SubagentStop        → agent.finish   (agentId = agent_id)
  *                         둘 다 agent_type 이 없거나 비면 null(유령 서브에이전트, 2026-10-23 캡처)
+ *   (모든 훅)           agent_id 가 있는데 agent_type 이 없으면 null(내부 서브에이전트, 2026-10-28 캡처)
  *   Stop                → turn.end
  *   Notification        → attention      (permission_prompt/입력 요청만. idle_prompt 는 보내지 않음)
  *   PermissionRequest   → null. auto mode 분류기가 묻지 않고 허용할 때도 오므로(2026-10-23 캡처)
@@ -82,6 +83,10 @@ export function normalize(hookInput: unknown, ctx: NormalizeContext): OfficeEven
   if (!hook || !sessionId) return null
 
   const subagentId = str(input.agent_id)
+  // agent_id 는 있는데 agent_type 이 없으면 Claude Code 내부 서브에이전트(hook-notes 2026-10-28).
+  // SubagentStart 없이 도구부터 쓰고 Stop 은 빈 agent_type 으로 오거나 아예 안 와서, 보내면
+  // 퇴근 못 하는 이름 없는 직원이 남는다 → 어떤 훅이든 보내지 않는다.
+  if (subagentId && !str(input.agent_type)) return null
   const agentId = subagentId ?? MAIN_AGENT_ID
   const projectSource = ctx.projectDir ?? str(input.cwd)
   const project = projectSource ? truncate(baseName(projectSource), 120) : ''

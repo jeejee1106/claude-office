@@ -301,6 +301,21 @@ describe('normalize: 유령 서브에이전트 (C5)', () => {
     expect(normalize(input, fixedContext())).toBeNull()
   })
 
+  it.each([
+    'PreToolUse.subagent-Read.json',
+    'PostToolUse.subagent-Read.json',
+    'PermissionRequest.subagent.json',
+  ])('내부 서브에이전트(agent_id 만, agent_type 없음) %s → null (2026-10-28 캡처)', (f) => {
+    const { agent_type: _drop, ...input } = loadFixture(f) as Record<string, unknown>
+    expect(normalize(input, fixedContext())).toBeNull()
+  })
+
+  it('agent_type 이 있는 서브에이전트의 도구 이벤트는 그대로 통과', () => {
+    expect(normalize(loadFixture('PreToolUse.subagent-Read.json'), fixedContext())).toMatchObject({
+      kind: 'tool.start',
+    })
+  })
+
   it('실제 서브에이전트(Explore)는 그대로 통과', () => {
     expect(normalize(loadFixture('SubagentStart.json'), fixedContext())).toMatchObject({
       kind: 'agent.spawn',

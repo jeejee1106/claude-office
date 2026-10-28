@@ -170,6 +170,8 @@ export function permissionStep(input: unknown, pending: Pending, nowMs: number):
   switch (i.hook_event_name) {
     case 'PermissionRequest': {
       if (!SAFE_ID.test(agentId)) return {}
+      // 내부 서브에이전트(agent_type 없음)는 사무실에 없으므로 "?"를 귀속하지 않는다(normalize 와 같은 규칙).
+      if (str(i.agent_id) && !str(i.agent_type)) return {}
       const tool = str(i.tool_name)
       const entry: PendingRequest = { ts: nowMs }
       if (tool && SAFE_TOOL.test(tool)) entry.tool = tool
