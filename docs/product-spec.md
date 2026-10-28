@@ -92,7 +92,7 @@
 | --- | --- |
 | 훅 설치 기본 위치 | 전역(`~/.claude/settings.json`). 한 번 설치로 모든 프로젝트의 Claude Code 세션이 보인다. 프로젝트 설치는 `--project` 옵션 |
 | 훅 전송 방식 | 동기(도구 호출마다 약 0.06초 지연). 화면 순서가 항상 정확한 쪽을 택함 |
-| 명령 이름 | 배포할 때 하나의 `claude-office` 명령으로 합친다: `claude-office`(서버+화면 실행), `claude-office install`/`uninstall`(훅). 훅 실행용 `claude-office-hook`은 따로 둔다 |
+| 명령 이름 | 배포할 때 하나의 `claude-office` 명령으로 합친다: `claude-office`(서버+화면 실행), `claude-office install`/`uninstall`(훅). 훅 실행용 `claude-office-hook`은 따로 둔다. 2026-10-28 구현: 인자 없이(또는 서버 옵션만) 실행하면 서버 + 빌드된 화면을 http://127.0.0.1:7333 에서 띄우고, 저장소에서는 `pnpm office`. npm 배포는 아직 |
 
 ## 8. 아직 정하지 않은 것 (사용자 의견 필요)
 

@@ -3,7 +3,7 @@
 Claude Code의 훅에 `claude-office-hook`을 등록하면, 터미널에서 일하는 Claude Code의 행동이 로컬 서버(7333번 포트)로 전달되고 픽셀 사무실의 캐릭터가 움직입니다.
 
 ```
-Claude Code ──훅(stdin JSON)──▶ claude-office-hook ──POST /events──▶ 서버(:7333) ──WS──▶ 웹(:5173)
+Claude Code ──훅(stdin JSON)──▶ claude-office-hook ──POST /events──▶ 서버(:7333) ──WS──▶ 웹(:7333, 개발 중엔 :5173)
 ```
 
 ## 1. 빌드
@@ -40,14 +40,26 @@ node /path/to/claude-office/packages/collector/dist/claude-office.js install --p
 ## 3. 대시보드 실행
 
 ```bash
-pnpm dev
+pnpm office
 ```
 
-서버(`http://127.0.0.1:7333`)와 웹 개발 서버가 함께 뜹니다.
+화면(웹)을 빌드하고, 수집기를 빌드한 뒤, 서버와 화면을 `http://127.0.0.1:7333`에서 함께 실행합니다. 뒤에 붙인 인자는 서버로 넘어갑니다(예: `pnpm office --port 7444`, `--record <파일>`). 이때는 `pnpm office`가 수집기 빌드까지 하므로 1단계의 빌드를 따로 하지 않아도 되지만, 2단계 설치 전에는 빌드가 필요합니다.
+
+`claude-office` 명령은 하나이고, 인자에 따라 동작이 다릅니다.
+
+| 실행 | 하는 일 |
+| --- | --- |
+| `claude-office` (또는 서버 옵션 `--port` `--host` `--record` `--replay` `--speed` `--loop`만) | 서버 + 화면 실행 |
+| `claude-office install` / `uninstall` | 훅 설치 / 제거 |
+| `claude-office help` | 도움말 (종료 코드 0). 모르는 하위 명령은 오류와 함께 종료 코드 1 |
+
+이전에는 인자 없이 실행하면 도움말을 보여 주고 종료 코드 1로 끝났지만, 이제는 서버를 시작합니다. 이 문서의 `node packages/collector/dist/claude-office.js …`는 위 `claude-office`와 같은 명령입니다. 아직 npm 배포 전이라 전역 설치 방법은 안내하지 않습니다.
+
+코드를 고치며 개발할 때는 대신 `pnpm dev`를 씁니다. 화면은 http://localhost:5173, 서버는 7333에서 뜨고 코드가 바뀌면 자동으로 다시 시작합니다.
 
 ## 4. Claude Code 사용 → 브라우저로 보기
 
-평소처럼 Claude Code를 쓰고 브라우저에서 **http://localhost:5173**을 엽니다. 파일을 읽으면 자료실로, 명령을 실행하면 서버실로, 서브에이전트를 부르면 새 팀원이 문으로 들어옵니다.
+평소처럼 Claude Code를 쓰고 브라우저에서 **http://127.0.0.1:7333**을 엽니다(`pnpm dev`로 띄웠다면 http://localhost:5173). 파일을 읽으면 자료실로, 명령을 실행하면 서버실로, 서브에이전트를 부르면 새 팀원이 문으로 들어옵니다.
 
 ## 제거
 
@@ -76,5 +88,7 @@ node packages/collector/dist/claude-office.js uninstall      # 프로젝트에 �
   # 서버가 떠 있으면:  [claude-office-hook] turn.end → 202
   # 서버가 꺼져 있으면: [claude-office-hook] turn.end not sent: connect ECONNREFUSED 127.0.0.1:7333
   ```
+- **"web UI not built" 안내가 뜸**: 화면이 아직 빌드되지 않았습니다. `pnpm office`를 쓰거나 `pnpm --filter @claude-office/web build` 후 서버를 다시 시작하세요.
+- **"port 7333 is already in use"**: 이미 서버(또는 `pnpm dev`)가 떠 있습니다. 끄거나 `--port <n>`으로 다른 포트를 쓰세요. 포트를 바꾸면 훅의 `CLAUDE_OFFICE_URL`도 맞춰야 합니다.
 - **"hook script not found"**: 1단계의 빌드를 먼저 실행합니다.
 - **"is not valid JSON; not touching it"**: settings.json 문법 오류입니다. 설치 도구는 파일을 고치지 않으니 직접 고친 뒤 다시 실행합니다.
