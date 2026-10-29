@@ -26,8 +26,8 @@ interface Voice {
   notes: readonly Note[]
 }
 
-/** 전체 음량(작게). 각 소리의 gain 에 곱한다 */
-export const MASTER_GAIN = 0.5
+/** 전체 음량. 각 소리의 gain 에 곱한다 (2026-10-29 사용자: 0.5 는 안 들렸고 2 는 좀 큼) */
+export const MASTER_GAIN = 1
 
 /** 소리 모양. 모두 0.1~0.4초 */
 export const VOICES: Readonly<Record<SoundId, Voice>> = {
@@ -120,34 +120,52 @@ export function createWebAudioSynth(
     play(id) {
       const c = ensure()
       if (c === null) return
-      resume(c)
-      if (c.state !== 'running') return
+      if (c.state === 'running') {
+        schedule(c, id)
+        return
+      }
+      // 막 만든 AudioContext 는 resume 이 끝나야 running 이 된다 → 끝나면 그때 낸다
+      if (c.state !== 'suspended') return
       try {
-        const voice = VOICES[id]
-        const t0 = c.currentTime
-        const out = c.createGain()
-        out.gain.value = voice.gain * MASTER_GAIN
-        out.connect(c.destination)
-        for (const n of voice.notes) {
-          const osc = c.createOscillator()
-          const env = c.createGain()
-          osc.type = voice.wave
-          osc.frequency.value = n.freq
-          // 딸깍 소리가 나지 않게 아주 짧게 올렸다 내린다
-          const start = t0 + n.at
-          const end = start + n.dur
-          env.gain.setValueAtTime(0, start)
-          env.gain.linearRampToValueAtTime(1, start + 0.005)
-          env.gain.setValueAtTime(1, Math.max(start + 0.005, end - 0.02))
-          env.gain.linearRampToValueAtTime(0, end)
-          osc.connect(env)
-          env.connect(out)
-          osc.start(start)
-          osc.stop(end + 0.01)
-        }
-      } catch (err) {
-        fail(err)
+        c.resume()
+          .then(() => {
+            if (c.state === 'running') schedule(c, id)
+          })
+          .catch(() => {
+            // 사용자 동작 밖이라 거절됨 — 이번 소리는 건너뛴다
+          })
+      } catch {
+        // 위와 같음
       }
     },
+  }
+
+  function schedule(c: AudioContext, id: SoundId) {
+    try {
+      const voice = VOICES[id]
+      const t0 = c.currentTime
+      const out = c.createGain()
+      out.gain.value = voice.gain * MASTER_GAIN
+      out.connect(c.destination)
+      for (const n of voice.notes) {
+        const osc = c.createOscillator()
+        const env = c.createGain()
+        osc.type = voice.wave
+        osc.frequency.value = n.freq
+        // 딸깍 소리가 나지 않게 아주 짧게 올렸다 내린다
+        const start = t0 + n.at
+        const end = start + n.dur
+        env.gain.setValueAtTime(0, start)
+        env.gain.linearRampToValueAtTime(1, start + 0.005)
+        env.gain.setValueAtTime(1, Math.max(start + 0.005, end - 0.02))
+        env.gain.linearRampToValueAtTime(0, end)
+        osc.connect(env)
+        env.connect(out)
+        osc.start(start)
+        osc.stop(end + 0.01)
+      }
+    } catch (err) {
+      fail(err)
+    }
   }
 }

@@ -42,7 +42,11 @@ export function SoundToggle() {
       aria-pressed={on}
       title={t(on ? 'soundOffHint' : 'soundOnHint', lang)}
       onClick={() => {
-        if (!on) player.unlock()
+        if (!on) {
+          player.unlock()
+          // 켜자마자 한 번 들려줘서 소리가 나는지 바로 알 수 있게 한다
+          player.play('spawn')
+        }
         setSoundEnabled(!on)
       }}
     >
