@@ -148,6 +148,10 @@ export const UI = {
     statsCommands: '실행한 명령',
     statsTeammates: '부른 팀원',
     statsTools: '도구 사용',
+    soundOn: '소리 켜짐',
+    soundOff: '소리 꺼짐',
+    soundOnHint: '눌러서 효과음 켜기',
+    soundOffHint: '눌러서 효과음 끄기',
     locale: 'ko-KR',
   },
   en: {
@@ -214,6 +218,10 @@ export const UI = {
     statsCommands: 'Commands',
     statsTeammates: 'Teammates',
     statsTools: 'Tool uses',
+    soundOn: 'Sound on',
+    soundOff: 'Sound off',
+    soundOnHint: 'Turn sound effects on',
+    soundOffHint: 'Turn sound effects off',
     locale: 'en-US',
   },
 } as const satisfies Record<Lang, Record<string, string>>

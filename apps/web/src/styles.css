@@ -412,6 +412,7 @@ body {
 }
 
 /* 직원 설정 (기획서 4절) */
+.sound-toggle,
 .emp-open,
 .emp-btn {
   padding: 2px 10px;
@@ -422,8 +423,16 @@ body {
   cursor: pointer;
   flex-shrink: 0;
 }
+.sound-toggle:hover,
 .emp-open:hover,
 .emp-btn:hover {
+  border-color: var(--accent);
+}
+.sound-toggle {
+  color: var(--muted);
+}
+.sound-toggle.on {
+  color: var(--accent);
   border-color: var(--accent);
 }
 .emp-btn.primary {

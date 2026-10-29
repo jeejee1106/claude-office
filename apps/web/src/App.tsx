@@ -9,6 +9,7 @@ import { FloorTabs } from './ui/FloorTabs'
 import { LangToggle } from './ui/LangToggle'
 import { OfficeView } from './ui/OfficeView'
 import { SessionPicker } from './ui/SessionPicker'
+import { SoundToggle } from './ui/SoundToggle'
 import { Timeline } from './ui/Timeline'
 import { StoreContext } from './ui/useStore'
 
@@ -32,6 +33,7 @@ export function App() {
           <FloorTabs />
           <SessionPicker />
           <LangToggle />
+          <SoundToggle />
           <EmployeeSettingsButton />
           <ConnectionBadge />
         </header>
