@@ -143,6 +143,11 @@ export const UI = {
     accCap: '야구 모자',
     accHeadphones: '헤드폰',
     accRibbon: '리본',
+    statsTitle: '오늘 작업량',
+    statsFiles: '수정한 파일',
+    statsCommands: '실행한 명령',
+    statsTeammates: '부른 팀원',
+    statsTools: '도구 사용',
     locale: 'ko-KR',
   },
   en: {
@@ -204,6 +209,11 @@ export const UI = {
     accCap: 'Baseball cap',
     accHeadphones: 'Headphones',
     accRibbon: 'Ribbon',
+    statsTitle: 'Today',
+    statsFiles: 'Files edited',
+    statsCommands: 'Commands',
+    statsTeammates: 'Teammates',
+    statsTools: 'Tool uses',
     locale: 'en-US',
   },
 } as const satisfies Record<Lang, Record<string, string>>

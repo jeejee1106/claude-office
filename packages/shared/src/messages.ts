@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { IsoTimestamp, OfficeEvent } from './event'
 import { OfficeState } from './state'
+import { DailyStats } from './stats'
 
 /*
  * 서버 → web WebSocket 메시지. web 은 safeParse 후 실패하면 무시한다(모르는 type 포함).
@@ -27,6 +28,21 @@ export const SnapshotMessage = z.object({
   recent: LenientEventList,
   /** 서버 시각. web 이 isAsleep 등 시간 계산을 서버 시계에 맞출 때 쓴다. */
   ts: IsoTimestamp,
+  /**
+   * 오늘 작업량(2026-10-28). 구버전 서버는 보내지 않는다. 형식이 틀리면 이 필드만
+   * 버리고(undefined) snapshot 은 살린다.
+   */
+  stats: DailyStats.optional().catch(undefined),
+})
+
+/**
+ * 오늘 작업량이 바뀔 때마다(숫자가 바뀐 event 직후, 자정 0 초기화) 서버가 보낸다.
+ * 항상 그날 전체(모든 층)를 담는다 — web 은 받은 값으로 통째로 바꾼다.
+ * 구버전 web 은 모르는 type 이라 safeParse 실패로 무시한다(경고 로그만).
+ */
+export const StatsMessage = z.object({
+  type: z.literal('stats'),
+  stats: DailyStats,
 })
 
 export const EventMessage = z.object({
@@ -43,9 +59,11 @@ export const ServerMessage = z.discriminatedUnion('type', [
   SnapshotMessage,
   EventMessage,
   HeartbeatMessage,
+  StatsMessage,
 ])
 export type ServerMessage = z.infer<typeof ServerMessage>
 export type SnapshotMessage = z.infer<typeof SnapshotMessage>
+export type StatsMessage = z.infer<typeof StatsMessage>
 export type EventMessage = z.infer<typeof EventMessage>
 export type HeartbeatMessage = z.infer<typeof HeartbeatMessage>
 

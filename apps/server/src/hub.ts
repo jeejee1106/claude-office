@@ -1,5 +1,6 @@
 import {
   createInitialState,
+  DailyStatsCounter,
   type IdleThresholds,
   idleSweep,
   type OfficeEvent,
@@ -48,6 +49,11 @@ export class Hub {
   private readonly dedupeLimit: number
   private readonly recentLimit: number
   private readonly onAccepted: HubOptions['onAccepted']
+  /**
+   * 오늘 작업량(기획서 7절). 서버 메모리에만 있다 — 다시 켜면 0부터(2026-10-28 결정).
+   * 파일 이름·에이전트 키는 이 안에만 있고 toWire() 로는 숫자만 나간다.
+   */
+  private readonly stats: DailyStatsCounter
 
   constructor(opts: HubOptions = {}) {
     this.now = opts.now ?? Date.now
@@ -55,6 +61,7 @@ export class Hub {
     this.dedupeLimit = opts.dedupeLimit ?? DEFAULT_DEDUPE_LIMIT
     this.recentLimit = opts.recentLimit ?? RECENT_EVENTS_LIMIT
     this.onAccepted = opts.onAccepted
+    this.stats = new DailyStatsCounter(this.now())
   }
 
   getState(): OfficeState {
@@ -78,6 +85,9 @@ export class Hub {
 
     this.broadcast({ type: 'event', event })
 
+    // origin 과 무관하게 센다(리플레이 포함, 2026-10-28 결정). event 다음에 stats 가 나간다.
+    if (this.stats.count(event, this.now(), this.state)) this.broadcastStats()
+
     if (this.onAccepted) {
       try {
         this.onAccepted(event, origin)
@@ -94,6 +104,8 @@ export class Hub {
     for (const e of idleSweep(this.state, this.now(), this.idle)) {
       if (this.ingest(e, 'server') === 'accepted') out.push(e)
     }
+    // 자정이 지나면 0 으로 바뀐 숫자를 알린다(이벤트가 없어도 sweep 주기 안에).
+    if (this.stats.rollover(this.now())) this.broadcastStats()
     return out
   }
 
@@ -103,7 +115,12 @@ export class Hub {
       state: this.state,
       recent: [...this.recent],
       ts: new Date(this.now()).toISOString(),
+      stats: this.stats.toWire(),
     }
+  }
+
+  private broadcastStats(): void {
+    this.broadcast({ type: 'stats', stats: this.stats.toWire() })
   }
 
   /** snapshot 을 즉시 보내고 이후 event/heartbeat 를 받도록 등록한다. 해제 함수를 반환한다. */

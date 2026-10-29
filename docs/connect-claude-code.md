@@ -75,6 +75,7 @@ node packages/collector/dist/claude-office.js uninstall      # 프로젝트에 �
 | --- | --- |
 | Claude Code를 막지 않음 | 훅은 항상 종료 코드 0으로 끝나고 아무것도 출력하지 않습니다. 서버가 꺼져 있으면 약 0.06초 만에 조용히 끝나고, 서버가 응답하지 않아도 0.5초 안에 끝납니다 |
 | 보내는 정보 | 무엇을 하는지만 보냅니다: 도구 이름, 파일 이름(경로 없이), 명령 첫 단어, 검색어 앞부분, 서브에이전트 종류. 파일 내용, 프롬프트 원문, 명령 출력, 절대 경로는 보내지 않습니다 |
+| 서버 → 화면 메시지 | 서버는 WebSocket으로 `snapshot`(접속 시 한 번), `event`, `stats`, `heartbeat`를 보냅니다. `stats`(`snapshot.stats`에도 같은 형식)는 "오늘 작업량" 숫자입니다: `{ day, floors: { <층>: { filesEdited, commands, teammates, toolUses } } }`. 숫자만 담기고 파일 이름·명령 내용은 담기지 않습니다. 숫자가 바뀔 때와 자정(현지 시각)에 0으로 돌아갈 때 전체를 다시 보내고, 구버전 서버는 보내지 않습니다 |
 | `CLAUDE_OFFICE_URL` | 보낼 주소 (기본 `http://127.0.0.1:7333/events`) |
 | `CLAUDE_OFFICE_DEBUG=1` | 훅이 무엇을 보냈는지, 왜 못 보냈는지를 stderr에 씁니다 |
 | `CLAUDE_OFFICE_DISABLE=1` | 훅을 지우지 않고 잠시 끕니다 |

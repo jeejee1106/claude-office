@@ -3,6 +3,7 @@ import { OfficeSocket } from './net/socket'
 import { createOfficeStore } from './store/officeStore'
 import { AgentList } from './ui/AgentList'
 import { ConnectionBadge } from './ui/ConnectionBadge'
+import { DailyStatsPanel } from './ui/DailyStatsPanel'
 import { EmployeeSettingsButton } from './ui/EmployeeSettings'
 import { FloorTabs } from './ui/FloorTabs'
 import { LangToggle } from './ui/LangToggle'
@@ -38,6 +39,7 @@ export function App() {
           <OfficeView />
           <aside className="side">
             <AgentList />
+            <DailyStatsPanel />
             <Timeline />
           </aside>
         </main>
