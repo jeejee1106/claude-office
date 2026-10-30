@@ -1,5 +1,6 @@
 import type { OfficeEvent } from '@claude-office/shared'
 import { Application, Assets, Container, Spritesheet, type Texture, TextureSource } from 'pixi.js'
+import { getDecorChoice, subscribeDecor } from '../decorSettings'
 import { getEmployeeSettings, subscribeEmployeeSettings } from '../employeeSettings'
 import {
   effectiveSessionId,
@@ -9,6 +10,13 @@ import {
 } from '../store/officeStore'
 import { ACCESSORY_ATLAS_URL, type AccessoryAtlas, missingAccessoryFrames } from './accessory'
 import type { DirectorOutput } from './commands'
+import {
+  DECOR_ATLAS_URL,
+  DECOR_FRAME_NAMES,
+  DECOR_RECHECK_MS,
+  type DecorAtlas,
+  resolveSeason,
+} from './decor'
 import { Director } from './director'
 import { BASE_HEIGHT, BASE_WIDTH, PROPS } from './layout'
 import {
@@ -83,10 +91,11 @@ export class OfficeScene {
       backgroundColor: 0x1b1f3b,
     })
     // 캐릭터 아틀라스: 실패해도 null → 플레이스홀더 캐릭터로 그린다(화면이 비지 않게)
-    const [atlas, office, partners] = await Promise.all([
+    const [atlas, office, partners, decor] = await Promise.all([
       loadCharacterAtlas(),
       loadOfficeAtlas(),
       loadPartnerAtlas(),
+      loadDecorAtlas(),
     ])
     // 소품 시트는 캐릭터 프레임 이름으로 빠진 프레임을 세므로 캐릭터 아틀라스 다음에
     const accessories = await loadAccessoryAtlas(atlas)
@@ -117,9 +126,16 @@ export class OfficeScene {
       office,
       partners,
       accessories,
+      decor,
     )
     this.renderer = renderer
     renderer.drawRoom(PROPS)
+    // 계절 장식: 고르기가 바뀌면 바로, 자동이면 1분마다 날짜를 다시 본다(자정 넘김). 같은 계절이면 렌더러가 무시
+    const applyDecor = () => renderer.setDecor(resolveSeason(getDecorChoice(), new Date()))
+    applyDecor()
+    this.cleanups.push(subscribeDecor(applyDecor))
+    const decorTimer = setInterval(applyDecor, DECOR_RECHECK_MS)
+    this.cleanups.push(() => clearInterval(decorTimer))
     this.roster = new Roster(
       (variant, accessory) => renderer.createCharacter(variant, accessory),
       (cmd) => {
@@ -246,8 +262,40 @@ function createRenderer(
   office: OfficeAtlas<Texture> | null,
   partners: PartnerAtlas<Texture> | null,
   accessories: AccessoryAtlas<Texture> | null,
+  decor: DecorAtlas<Texture> | null,
 ): SceneRenderer {
-  return new PlaceholderRenderer(layers, overlay, atlas, office, partners, accessories)
+  return new PlaceholderRenderer(layers, overlay, atlas, office, partners, accessories, decor)
+}
+
+/**
+ * decor.json(+png) 로드 — 계절 장식. 실패하면 경고만 남기고 null(장식을 코드 도형으로 그린다).
+ * 시트를 쓰는 건 장식을 켤 때뿐이지만, 고르기를 바꿨을 때 바로 보이도록 처음에 같이 불러 둔다.
+ */
+async function loadDecorAtlas(): Promise<DecorAtlas<Texture> | null> {
+  const url = `${import.meta.env.BASE_URL}${DECOR_ATLAS_URL}`
+  try {
+    const sheet: unknown = await Assets.load(url)
+    if (!(sheet instanceof Spritesheet) || Object.keys(sheet.textures).length === 0) {
+      console.warn(
+        `[claude-office] ${url} 이 장식 시트 형식이 아님 — 장식을 코드 도형으로 그립니다.`,
+      )
+      return null
+    }
+    sheet.textureSource.scaleMode = 'nearest'
+    const missing = DECOR_FRAME_NAMES.filter((n) => sheet.textures[n] === undefined)
+    if (missing.length > 0) {
+      console.warn(
+        `[claude-office] 장식 시트에 프레임 ${missing.length}개 없음(예: ${missing[0]}) — 그 장식만 코드 도형으로 그립니다.`,
+      )
+    }
+    return { textures: { ...sheet.textures }, frameMs: parseFrameMs(sheet.data.meta) }
+  } catch (err) {
+    console.warn(
+      `[claude-office] 장식 시트 로드 실패(${url}) — 장식을 코드 도형으로 그립니다.`,
+      err,
+    )
+    return null
+  }
 }
 
 /**

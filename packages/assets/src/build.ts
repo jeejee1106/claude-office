@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { packAccessories } from './accessorySheet'
 import { encodePng, type PixelImage } from './canvas'
+import { packDecor } from './decorSheet'
 import { packOffice } from './officeSheet'
 import { packPartners } from './partnerSheet'
 import { OUTPUT_DIR } from './paths'
@@ -14,6 +15,7 @@ import { assertPalette, offPalettePixels } from './validate'
  *   partners:   파트너 몬스터 5종 × 행동 (16×16, pet_*)
  *   accessories: 외모 소품 5종 오버레이 (캐릭터 프레임과 같은 크기·앵커, acc_*)
  *   office:     업무 공간 바닥·벽·칸막이 타일, 책상·의자, 팀 간판 3조각, 소품
+ *   decor:      계절 장식 4계절(봄·여름·할로윈·크리스마스, deco_*)
  * 실행: pnpm --filter @claude-office/assets build
  */
 
@@ -59,4 +61,12 @@ write('office', office.image, office.atlas)
 console.log(
   `office: ${Object.keys(office.atlas.frames).length} frames, ` +
     `${office.image.width}x${office.image.height}px -> ${OUTPUT_DIR}`,
+)
+
+const decor = packDecor()
+write('decor', decor.image, decor.atlas)
+console.log(
+  `decor: ${Object.keys(decor.atlas.frames).length} frames, ` +
+    `${Object.keys(decor.atlas.animations).length} animations, ` +
+    `${decor.image.width}x${decor.image.height}px -> ${OUTPUT_DIR}`,
 )

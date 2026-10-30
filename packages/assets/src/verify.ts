@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { type AccessoryAtlas, packAccessories } from './accessorySheet'
 import { decodePng, PixelImage } from './canvas'
+import { type DecorAtlas, packDecor } from './decorSheet'
 import type { OfficeAtlas } from './officeSheet'
 import { VARIANT_COUNT } from './palette'
 import { type PartnerAtlas, packPartners, petAnimDirs } from './partnerSheet'
@@ -215,9 +216,26 @@ for (const kind of ACC_KINDS) {
   }
 }
 
-// 씬 코드가 이름으로 부르는 furn_/tile_/ui_/pet_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
+// ---------------------------------------------------------------------------
+// decor 시트(계절 장식): 디스크 = 스크립트, 팔레트, 애니메이션 프레임이 시트에 있는지
+// ---------------------------------------------------------------------------
+const decorAtlas = JSON.parse(readFileSync(resolve(OUTPUT_DIR, 'decor.json'), 'utf8')) as DecorAtlas
+const decorSheet = decodePng(readFileSync(resolve(OUTPUT_DIR, decorAtlas.meta.image)))
+const decorExpected = packDecor()
+if (!decorSheet.equals(decorExpected.image))
+  errors.push('decor: PNG differs from the script (run build)')
+if (JSON.stringify(decorAtlas) !== JSON.stringify(decorExpected.atlas))
+  errors.push('decor: JSON differs from the script (run build)')
+const decorBad = offPalettePixels(decorSheet)
+if (decorBad.length) errors.push(`decor: off-palette pixels: ${decorBad.join(', ')}`)
+for (const [key, names] of Object.entries(decorAtlas.animations))
+  for (const n of names) if (!decorAtlas.frames[n]) errors.push(`decor: ${key} -> missing ${n}`)
+
+// 씬 코드가 이름으로 부르는 furn_/tile_/ui_/pet_/deco_ 프레임이 시트에 있는지(경고만 — 씬이 아직 없는 가구를 부를 수 있음)
 const warnings: string[] = []
 const known = new Set([
+  ...Object.keys(decorAtlas.frames),
+  ...Object.keys(decorAtlas.animations),
   ...Object.keys(officeAtlas.frames),
   ...Object.keys(atlas.frames),
   ...Object.keys(petAtlas.frames),
@@ -229,7 +247,7 @@ function scan(dir: string) {
     if (e.isDirectory()) scan(p)
     else if (/\.(ts|tsx)$/.test(e.name))
       for (const m of readFileSync(p, 'utf8').matchAll(
-        /['"`]((?:furn|tile|ui|pet)_[a-z0-9_]+)['"`]/g,
+        /['"`]((?:furn|tile|ui|pet|deco)_[a-z0-9_]+)['"`]/g,
       ))
         if (!known.has(m[1] as string))
           warnings.push(`${relative(REPO_ROOT, p)}: '${m[1]}' not in any sheet`)
@@ -249,5 +267,7 @@ console.log(
     `${Object.keys(OFFICE_ANIMATIONS).length} animations match the script; ` +
     `partners ${PET_KINDS.length} kinds, ${petChecked} frames match the script; ` +
     `accessories ${ACC_KINDS.length} kinds, ${accChecked} overlay frames match char_0 size/anchor + script; ` +
+    `decor ${Object.keys(decorAtlas.frames).length} frames + ` +
+    `${Object.keys(decorAtlas.animations).length} animations match the script; ` +
     '0 off-palette pixels',
 )

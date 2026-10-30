@@ -3,6 +3,15 @@ import { subscribeLang, teamName } from '../../i18n'
 import { type Accessory, type AccessoryAtlas, pickAccessoryFrame } from '../accessory'
 import type { AnimName, Effect, Mark } from '../activityMap'
 import {
+  DECOR_SPECS,
+  type DecorAtlas,
+  type DecorKind,
+  decorFrameIndex,
+  decorFrameMs,
+  decorPlacements,
+  type Season,
+} from '../decor'
+import {
   BASE_HEIGHT,
   BASE_WIDTH,
   COLS,
@@ -164,6 +173,21 @@ let warned = false
 const warnedKeys = new Set<string>()
 /** 소품 경고(시트 없음 = 'sheet', 프레임 없음 = 소품 종류)는 한 번씩만 */
 const warnedAccessory = new Set<string>()
+/** 장식 경고(시트 없음 = 'sheet', 프레임 없음 = 장식 종류)는 한 번씩만 */
+const warnedDecor = new Set<string>()
+
+/** 계절 장식 하나(시트 스프라이트 또는 코드 도형). 2프레임이면 ms 간격으로 교대 */
+interface DecorView {
+  obj: Container
+  kind: DecorKind
+  /** 시트 프레임(스프라이트일 때). 코드 도형이면 null → 프레임마다 다시 그린다 */
+  textures: Texture[] | null
+  g: Graphics | null
+  frames: number
+  ms: number
+  phase: number
+  frame: number
+}
 
 /** 상태(트리거)가 켜지면 active 프레임을 ms 간격으로 돌리고, 꺼지면 idle 로 돌아가는 가구 */
 interface PropToggle {
@@ -213,11 +237,16 @@ export class PlaceholderRenderer implements SceneRenderer {
   private readonly frontProps: Container[] = []
   private readonly signs: SignLabel[] = []
   private readonly unsubLang: () => void
+  /** 계절 장식(undefined = 아직 한 번도 정하지 않음) */
+  private season: Season | null | undefined = undefined
+  private decorViews: DecorView[] = []
+  private decorMs = 0
 
   private readonly atlas: CharacterAtlas<Texture> | null
   private readonly office: OfficeAtlas<Texture> | null
   private readonly partners: PartnerAtlas<Texture> | null
   private readonly accessories: AccessoryAtlas<Texture> | null
+  private readonly decor: DecorAtlas<Texture> | null
 
   /**
    * atlas 가 null 이면(로드 실패) 캐릭터도 코드로 그린 도형으로 그린다. office 도 같다(업무 공간 가구).
@@ -231,6 +260,7 @@ export class PlaceholderRenderer implements SceneRenderer {
     office: OfficeAtlas<Texture> | null = null,
     partners: PartnerAtlas<Texture> | null = null,
     accessories: AccessoryAtlas<Texture> | null = null,
+    decor: DecorAtlas<Texture> | null = null,
   ) {
     this.layers = layers
     this.dom = domOverlay
@@ -238,6 +268,7 @@ export class PlaceholderRenderer implements SceneRenderer {
     this.office = office
     this.partners = partners
     this.accessories = accessories
+    this.decor = decor
     if (!warned && atlas === null) {
       warned = true
       console.warn(
@@ -451,6 +482,83 @@ export class PlaceholderRenderer implements SceneRenderer {
     this.boardWritten = written
   }
 
+  setDecor(season: Season | null): void {
+    if (season === this.season) return
+    this.season = season
+    this.clearDecor()
+    for (const p of decorPlacements(season)) {
+      const spec = DECOR_SPECS[p.kind]
+      const textures = this.decorTextures(p.kind)
+      const flip = p.flipX ? -1 : 1
+      const base = { kind: p.kind, frames: spec.frames.length, phase: p.phase, frame: -1 }
+      const ms = decorFrameMs(p.kind, this.decor?.frameMs)
+      let view: DecorView
+      if (textures !== null) {
+        const sp = new Sprite(textures[0])
+        sp.anchor.set(spec.ax, spec.ay)
+        sp.scale.x = flip
+        sp.position.set(Math.round(p.x), Math.round(p.y))
+        view = { ...base, obj: sp, textures, g: null, ms, frames: textures.length }
+      } else {
+        // 시트·프레임이 없으면 그 장식만 코드 도형(같은 anchor·크기)
+        const root = new Container()
+        const g = new Graphics()
+        g.position.set(-Math.round(spec.ax * spec.w), -Math.round(spec.ay * spec.h))
+        root.addChild(g)
+        root.scale.x = flip
+        root.position.set(Math.round(p.x), Math.round(p.y))
+        view = { ...base, obj: root, textures: null, g, ms }
+      }
+      // 벽 장식 = 가구 층(늘 캐릭터 뒤), 바닥 장식 = 캐릭터 층 바닥 접점 y 로 깊이 정렬(가구와 같은 규칙)
+      if (spec.layer === 'wall') this.layers.furniture.addChild(view.obj)
+      else {
+        view.obj.zIndex = p.y
+        this.layers.characters.addChild(view.obj)
+      }
+      this.decorViews.push(view)
+    }
+    this.decorMs = 0
+    this.tickDecor(0)
+  }
+
+  /** 장식의 시트 프레임(모두 있어야 사용). 하나라도 없으면 null → 코드 도형 */
+  private decorTextures(kind: DecorKind): Texture[] | null {
+    const names = DECOR_SPECS[kind].frames
+    const list = names.map((n) => this.decor?.textures[n])
+    if (list.every((t): t is Texture => t !== undefined)) return list
+    const key = this.decor === null ? 'sheet' : kind
+    if (!warnedDecor.has(key)) {
+      warnedDecor.add(key)
+      console.warn(
+        this.decor === null
+          ? '[claude-office] 장식 시트(decor.json) 없음 — 계절 장식을 코드 도형으로 그립니다.'
+          : `[claude-office] 장식 시트에 ${names.join(', ')} 없음 — 그 장식만 코드 도형으로 그립니다.`,
+      )
+    }
+    return null
+  }
+
+  private tickDecor(dtMs: number): void {
+    if (this.decorViews.length === 0) return
+    this.decorMs += dtMs
+    for (const v of this.decorViews) {
+      const f = decorFrameIndex(this.decorMs, v.ms, v.frames, v.phase)
+      if (f === v.frame) continue
+      v.frame = f
+      if (v.textures !== null) {
+        const t = v.textures[f]
+        if (t !== undefined && v.obj instanceof Sprite) v.obj.texture = t
+      } else if (v.g !== null) {
+        v.g.clear()
+        drawDecorShape(v.g, v.kind, f)
+      }
+    }
+  }
+
+  private clearDecor(): void {
+    for (const v of this.decorViews.splice(0)) v.obj.destroy({ children: true })
+  }
+
   setScale(scale: number): void {
     this.scale = scale
     for (const v of this.views) v.setScale(scale)
@@ -588,6 +696,7 @@ export class PlaceholderRenderer implements SceneRenderer {
       }
     }
     this.tickRoomProps(dtMs)
+    this.tickDecor(dtMs)
   }
 
   /** 문·터미널·파쇄기·커피머신·화이트보드·캐비닛: 캐릭터 상태(와 서버 busy)에서 프레임을 고른다 */
@@ -635,6 +744,7 @@ export class PlaceholderRenderer implements SceneRenderer {
 
   destroy(): void {
     this.unsubLang()
+    this.clearDecor()
     for (const v of [...this.views]) v.destroy()
     for (const v of [...this.partnerViews]) v.destroy()
     for (const c of this.frontProps.splice(0)) c.destroy()
@@ -918,6 +1028,109 @@ function drawProp(g: Graphics, p: Prop): void {
       g.rect(x + 4, y + h - 8, 8, 8).fill(C.pot)
       g.rect(x + 2, y + h - 18, 12, 10).fill(C.plant)
       g.rect(x + 5, y + h - 22, 6, 4).fill(C.plant)
+      break
+  }
+}
+
+/**
+ * decor 시트가 없을 때의 계절 장식 코드 도형. (0,0) = 프레임 왼쪽 위, 크기 = DECOR_SPECS 의 w×h.
+ * frame = 2프레임 장식의 지금 프레임(호박·트리 불빛 깜빡임, 선풍기·박쥐 움직임).
+ */
+function drawDecorShape(g: Graphics, kind: DecorKind, frame: number): void {
+  const on = frame % 2 === 1
+  switch (kind) {
+    case 'blossomPot':
+    case 'sunflowerPot': {
+      g.rect(4, 24, 8, 8).fill(C.pot)
+      g.rect(7, 10, 2, 14).fill(C.plant)
+      if (kind === 'blossomPot') {
+        g.rect(2, 2, 12, 10).fill(0xf59ab5)
+        g.rect(5, 4, 2, 2).fill(C.white)
+        g.rect(10, 7, 2, 2).fill(C.white)
+      } else {
+        g.rect(3, 2, 10, 10).fill(C.yellow)
+        g.rect(6, 5, 4, 4).fill(C.woodDark)
+        g.rect(9, 14, 4, 3).fill(C.plant)
+      }
+      break
+    }
+    case 'garland':
+      g.rect(0, 1, 32, 1).fill(C.plant)
+      for (let i = 0; i < 4; i++) {
+        const x = 2 + i * 8
+        g.rect(x, 2 + (i % 2) * 2, 4, 4).fill(i % 2 ? C.white : 0xf59ab5)
+      }
+      break
+    case 'fan':
+      g.rect(7, 14, 2, 14).fill(C.metalDark)
+      g.rect(3, 28, 10, 4).fill(C.metalDark)
+      g.rect(2, 2, 12, 12).fill(C.metal)
+      if (on) g.rect(3, 7, 10, 2).fill(C.white)
+      else g.rect(7, 3, 2, 10).fill(C.white)
+      g.rect(7, 7, 2, 2).fill(C.dark)
+      break
+    case 'watermelon':
+      g.rect(2, 8, 12, 7).fill(C.plant)
+      g.rect(3, 8, 10, 5).fill(C.red)
+      g.rect(5, 10, 1, 1).fill(C.dark)
+      g.rect(9, 10, 1, 1).fill(C.dark)
+      break
+    case 'pumpkin':
+      g.rect(2, 6, 12, 10).fill(0xf08c00)
+      g.rect(7, 3, 2, 3).fill(C.plant)
+      g.rect(4, 9, 2, 2).fill(on ? C.yellow : C.dark)
+      g.rect(10, 9, 2, 2).fill(on ? C.yellow : C.dark)
+      g.rect(5, 13, 6, 1).fill(on ? C.yellow : C.dark)
+      break
+    case 'bat':
+      g.rect(7, 0, 1, 5).fill(C.metalDark)
+      g.rect(5, 5, 6, 5).fill(C.dark)
+      if (on) {
+        g.rect(1, 4, 4, 3).fill(C.dark)
+        g.rect(11, 4, 4, 3).fill(C.dark)
+      } else {
+        g.rect(1, 7, 4, 3).fill(C.dark)
+        g.rect(11, 7, 4, 3).fill(C.dark)
+      }
+      g.rect(6, 6, 1, 1).fill(C.red)
+      g.rect(9, 6, 1, 1).fill(C.red)
+      break
+    case 'cobweb':
+      g.rect(0, 0, 16, 1).fill(C.white)
+      g.rect(0, 0, 1, 16).fill(C.white)
+      for (let i = 1; i < 12; i++) g.rect(i, i, 1, 1).fill(C.white)
+      g.rect(0, 6, 7, 1).fill(C.white)
+      g.rect(6, 0, 1, 7).fill(C.white)
+      break
+    case 'tree': {
+      g.rect(14, 40, 4, 8).fill(C.woodDark)
+      g.rect(10, 4, 12, 12).fill(C.plant)
+      g.rect(6, 14, 20, 14).fill(C.plant)
+      g.rect(2, 26, 28, 14).fill(C.plant)
+      g.rect(14, 0, 4, 4).fill(C.yellow)
+      const lights = [
+        [12, 10],
+        [18, 18],
+        [9, 22],
+        [22, 30],
+        [6, 34],
+        [15, 34],
+      ] as const
+      for (const [i, [x, y]] of lights.entries()) {
+        g.rect(x, y, 2, 2).fill((i + frame) % 2 === 0 ? C.red : C.yellow)
+      }
+      break
+    }
+    case 'gift':
+      g.rect(2, 6, 12, 10).fill(C.red)
+      g.rect(7, 6, 2, 10).fill(C.yellow)
+      g.rect(2, 9, 12, 2).fill(C.yellow)
+      g.rect(5, 3, 6, 3).fill(C.yellow)
+      break
+    case 'wreath':
+      g.rect(3, 2, 10, 12).fill(C.plant)
+      g.rect(6, 5, 4, 6).fill(C.wall)
+      g.rect(6, 11, 4, 3).fill(C.red)
       break
   }
 }

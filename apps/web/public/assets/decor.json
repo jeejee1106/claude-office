@@ -1,0 +1,434 @@
+{
+  "frames": {
+    "deco_spring_blossom_pot_0": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_spring_garland_0": {
+      "frame": {
+        "x": 18,
+        "y": 0,
+        "w": 32,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0
+      }
+    },
+    "deco_summer_fan_0": {
+      "frame": {
+        "x": 52,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_summer_fan_1": {
+      "frame": {
+        "x": 70,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_summer_watermelon_0": {
+      "frame": {
+        "x": 88,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_summer_sunflower_pot_0": {
+      "frame": {
+        "x": 106,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_halloween_pumpkin_0": {
+      "frame": {
+        "x": 124,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_halloween_pumpkin_1": {
+      "frame": {
+        "x": 142,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_halloween_bat_0": {
+      "frame": {
+        "x": 160,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0
+      }
+    },
+    "deco_halloween_bat_1": {
+      "frame": {
+        "x": 178,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0
+      }
+    },
+    "deco_halloween_cobweb_0": {
+      "frame": {
+        "x": 196,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "deco_christmas_tree_0": {
+      "frame": {
+        "x": 214,
+        "y": 0,
+        "w": 32,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 48
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_christmas_tree_1": {
+      "frame": {
+        "x": 0,
+        "y": 50,
+        "w": 32,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 48
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_christmas_gift_0": {
+      "frame": {
+        "x": 34,
+        "y": 50,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_christmas_wreath_0": {
+      "frame": {
+        "x": 52,
+        "y": 50,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0
+      }
+    }
+  },
+  "animations": {
+    "deco_summer_fan": ["deco_summer_fan_0", "deco_summer_fan_1"],
+    "deco_halloween_pumpkin": ["deco_halloween_pumpkin_0", "deco_halloween_pumpkin_1"],
+    "deco_halloween_bat": ["deco_halloween_bat_0", "deco_halloween_bat_1"],
+    "deco_christmas_tree": ["deco_christmas_tree_0", "deco_christmas_tree_1"]
+  },
+  "meta": {
+    "app": "@claude-office/assets (generated — do not edit by hand)",
+    "version": "1",
+    "image": "decor.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 256,
+      "h": 98
+    },
+    "scale": 1,
+    "tile": 16,
+    "seasons": {
+      "spring": ["deco_spring_blossom_pot", "deco_spring_garland"],
+      "summer": ["deco_summer_fan", "deco_summer_watermelon", "deco_summer_sunflower_pot"],
+      "halloween": ["deco_halloween_pumpkin", "deco_halloween_bat", "deco_halloween_cobweb"],
+      "christmas": ["deco_christmas_tree", "deco_christmas_gift", "deco_christmas_wreath"]
+    },
+    "place": {
+      "deco_spring_blossom_pot": "floor",
+      "deco_spring_garland": "hang",
+      "deco_summer_fan": "floor",
+      "deco_summer_watermelon": "floor",
+      "deco_summer_sunflower_pot": "floor",
+      "deco_halloween_pumpkin": "floor",
+      "deco_halloween_bat": "hang",
+      "deco_halloween_cobweb": "corner",
+      "deco_christmas_tree": "floor",
+      "deco_christmas_gift": "floor",
+      "deco_christmas_wreath": "hang"
+    },
+    "placeAnchor": {
+      "floor": {
+        "x": 0.5,
+        "y": 1
+      },
+      "hang": {
+        "x": 0.5,
+        "y": 0
+      },
+      "corner": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    "frameMs": {
+      "deco_summer_fan": 120,
+      "deco_halloween_pumpkin": 400,
+      "deco_halloween_bat": 180,
+      "deco_christmas_tree": 600
+    },
+    "notes": {
+      "deco_spring_blossom_pot": "벚꽃 화분(바닥)",
+      "deco_spring_garland": "꽃 가랜드(벽 위, 양 끝 핀이 맨 윗줄)",
+      "deco_summer_fan": "선풍기(바닥, 날개 회전 2프레임)",
+      "deco_summer_watermelon": "수박 조각(책상·테이블 위나 바닥)",
+      "deco_summer_sunflower_pot": "해바라기 화분(바닥)",
+      "deco_halloween_pumpkin": "호박 등불(바닥, 불빛 깜빡임 2프레임)",
+      "deco_halloween_bat": "박쥐(천장·벽 위에 실로 매달림, 날갯짓 2프레임)",
+      "deco_halloween_cobweb": "거미줄(왼쪽 위 모서리. 오른쪽 모서리는 좌우 반전)",
+      "deco_christmas_tree": "트리(바닥, 전구 깜빡임 2프레임)",
+      "deco_christmas_gift": "선물 상자(바닥)",
+      "deco_christmas_wreath": "리스(벽, 맨 윗줄이 거는 점)"
+    }
+  }
+}
