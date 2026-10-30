@@ -4,6 +4,7 @@ import { createOfficeStore } from './store/officeStore'
 import { AgentList } from './ui/AgentList'
 import { ConnectionBadge } from './ui/ConnectionBadge'
 import { DailyStatsPanel } from './ui/DailyStatsPanel'
+import { DecorPicker } from './ui/DecorPicker'
 import { EmployeeSettingsButton } from './ui/EmployeeSettings'
 import { FloorTabs } from './ui/FloorTabs'
 import { LangToggle } from './ui/LangToggle'
@@ -34,6 +35,7 @@ export function App() {
           <SessionPicker />
           <LangToggle />
           <SoundToggle />
+          <DecorPicker />
           <EmployeeSettingsButton />
           <ConnectionBadge />
         </header>

@@ -1,5 +1,6 @@
 import type { Accessory } from '../accessory'
 import type { AnimName, Effect, Mark } from '../activityMap'
+import type { Season } from '../decor'
 import type { Dir, Prop } from '../layout'
 import type { PartnerAnim, PartnerKind } from '../partner'
 
@@ -60,6 +61,8 @@ export interface SceneRenderer {
   setServerBusy(busy: boolean): void
   /** 회의실 화이트보드 글씨 남김(세션에서 계획을 한 번이라도 함). 쓰는 중의 글씨는 렌더러가 따로 켠다 */
   setBoardWritten(written: boolean): void
+  /** 계절 장식(모든 층 같은 고정 자리). null 이면 장식을 치운다. 같은 계절이면 아무것도 안 함 */
+  setDecor(season: Season | null): void
   /** 매 프레임 호출(조명 전환 등 전역 애니메이션) */
   tick(dtMs: number): void
   /** 정수 배율이 바뀌었을 때(오버레이 DOM 위치 계산용) */
