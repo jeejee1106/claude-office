@@ -359,6 +359,78 @@
         "x": 0.5,
         "y": 0
       }
+    },
+    "deco_autumn_maple_pot_0": {
+      "frame": {
+        "x": 70,
+        "y": 50,
+        "w": 16,
+        "h": 32
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 32
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 32
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_autumn_leaves_0": {
+      "frame": {
+        "x": 88,
+        "y": 50,
+        "w": 16,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 16,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 16,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    },
+    "deco_autumn_garland_0": {
+      "frame": {
+        "x": 106,
+        "y": 50,
+        "w": 32,
+        "h": 16
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 32,
+        "h": 16
+      },
+      "sourceSize": {
+        "w": 32,
+        "h": 16
+      },
+      "anchor": {
+        "x": 0.5,
+        "y": 0
+      }
     }
   },
   "animations": {
@@ -382,6 +454,7 @@
       "spring": ["deco_spring_blossom_pot", "deco_spring_garland"],
       "summer": ["deco_summer_fan", "deco_summer_watermelon", "deco_summer_sunflower_pot"],
       "halloween": ["deco_halloween_pumpkin", "deco_halloween_bat", "deco_halloween_cobweb"],
+      "autumn": ["deco_autumn_maple_pot", "deco_autumn_leaves", "deco_autumn_garland"],
       "christmas": ["deco_christmas_tree", "deco_christmas_gift", "deco_christmas_wreath"]
     },
     "place": {
@@ -395,7 +468,10 @@
       "deco_halloween_cobweb": "corner",
       "deco_christmas_tree": "floor",
       "deco_christmas_gift": "floor",
-      "deco_christmas_wreath": "hang"
+      "deco_christmas_wreath": "hang",
+      "deco_autumn_maple_pot": "floor",
+      "deco_autumn_leaves": "floor",
+      "deco_autumn_garland": "hang"
     },
     "placeAnchor": {
       "floor": {
@@ -428,7 +504,10 @@
       "deco_halloween_cobweb": "거미줄(왼쪽 위 모서리. 오른쪽 모서리는 좌우 반전)",
       "deco_christmas_tree": "트리(바닥, 전구 깜빡임 2프레임)",
       "deco_christmas_gift": "선물 상자(바닥)",
-      "deco_christmas_wreath": "리스(벽, 맨 윗줄이 거는 점)"
+      "deco_christmas_wreath": "리스(벽, 맨 윗줄이 거는 점)",
+      "deco_autumn_maple_pot": "단풍나무 화분(바닥)",
+      "deco_autumn_leaves": "낙엽 더미(바닥)",
+      "deco_autumn_garland": "단풍잎 가랜드(벽 위, 양 끝 핀이 맨 윗줄)"
     }
   }
 }

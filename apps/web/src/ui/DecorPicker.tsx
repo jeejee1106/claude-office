@@ -10,6 +10,7 @@ const LABEL: Readonly<Record<DecorChoice, UiKey>> = {
   spring: 'decorSpring',
   summer: 'decorSummer',
   halloween: 'decorHalloween',
+  autumn: 'decorAutumn',
   christmas: 'decorChristmas',
 }
 

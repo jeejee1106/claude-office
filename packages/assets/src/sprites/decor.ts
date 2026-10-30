@@ -22,7 +22,8 @@ import {
  *   corner  벽 모서리(거미줄) — anchor (0, 0) 왼쪽 위 = 모서리. 오른쪽 모서리는 좌우 반전(scale.x = -1)
  */
 
-export const SEASONS = ['spring', 'summer', 'halloween', 'christmas'] as const
+/** 달력 순서(가을 = 11월, 할로윈 다음·크리스마스 앞). 시트 안 배치 순서는 buildDecorItems 순서를 따른다 */
+export const SEASONS = ['spring', 'summer', 'halloween', 'autumn', 'christmas'] as const
 export type Season = (typeof SEASONS)[number]
 
 export type DecorPlace = 'floor' | 'hang' | 'corner'
@@ -527,6 +528,117 @@ function wreath(): string[][] {
 }
 
 // ---------------------------------------------------------------------------
+// 가을 (11월 단풍)
+// 팔레트에 순수 주황이 없어 빨강 = coral(c)/coralDark(C), 주황 = yellowDark(Y)/chestnut(n),
+// 노랑 = yellow(y)/yellowDark(Y) 로 칠한다.
+// ---------------------------------------------------------------------------
+
+type LeafTone = 'red' | 'orange' | 'yellow'
+const LEAF: Record<LeafTone, { light: string; dark: string }> = {
+  red: { light: 'c', dark: 'C' },
+  orange: { light: 'Y', dark: 'n' },
+  yellow: { light: 'y', dark: 'Y' },
+}
+
+/** 단풍나무 화분 채움 14×30 (빨강·주황 잎 덩어리 + 갈색 줄기 + 크림 도자기 화분) */
+function maplePot(): string[][] {
+  const clusters: [number, number, number, LeafTone][] = [
+    // 중심 x, y, 반지름, 색
+    [7, 5.4, 4.6, 'red'],
+    [3.9, 9.2, 3.6, 'orange'],
+    [10.1, 9.4, 3.6, 'red'],
+    [7, 12, 3, 'orange'],
+  ]
+  const g = shape(14, 30, (px, py, x, y) => {
+    if (y <= 15) {
+      // 가장 가까운(가장자리까지 여유가 큰) 덩어리의 색을 쓴다
+      let best: (typeof clusters)[number] | undefined
+      let room = 0
+      for (const c of clusters) {
+        const r = c[2] - Math.hypot(px - c[0], py - c[1])
+        if (r > room) {
+          room = r
+          best = c
+        }
+      }
+      // 가장자리를 들쭉날쭉하게(잎 끝): 비우고 아래 줄기·빈칸으로 넘긴다
+      if (room < 0.6 && (x + y) % 3 === 0) best = undefined
+      if (best) {
+        const [cx, cy, r, tone] = best
+        const { light, dark } = LEAF[tone]
+        const lit = px - cx + (py - cy)
+        if (lit < -r * 0.9) return 'y' // 좌상단 하이라이트
+        let shade = lit > r * 0.5
+        if ((x * 7 + y * 3) % 9 === 0) shade = !shade // 잎 결
+        return shade ? dark : light
+      }
+    }
+    // 줄기
+    if (y < 13) return null
+    if (y <= 22) return x === 6 ? 'b' : x === 7 ? 'B' : null
+    // 화분 (크림 도자기 — 잎의 주황·갈색과 구별되게)
+    if (y === 23) return x >= 1 && x <= 12 ? (x === 12 ? 'M' : 'm') : null
+    if (y === 24) return x >= 1 && x <= 12 ? 'M' : null
+    if (y <= 28) return x >= 2 && x <= 11 ? (x >= 10 ? 'M' : 'm') : null
+    return x >= 3 && x <= 10 ? 'M' : null
+  })
+  // 화분 테에 떨어진 잎 두 장
+  put(g, [
+    [3, 23, 'c'],
+    [9, 23, 'Y'],
+  ])
+  return g
+}
+
+/** 낙엽 더미 채움 14×8 (빨강·주황·노랑 잎이 2px 덩어리로 섞인 둔덕 + 위에 꽂힌 잎자루) */
+function leafPile(): string[][] {
+  const tones: LeafTone[] = ['red', 'orange', 'yellow']
+  const g = shape(14, 8, (px, py, x, y) => {
+    const dx = (px - 7) / 7
+    const dy = (py - 8) / 7
+    if (dx * dx + dy * dy > 1) return null
+    if (y === 0) return null
+    const bx = Math.floor(x / 2)
+    const by = Math.floor((y + (bx % 2)) / 2)
+    const tone = tones[(bx * 2 + by) % 3] as LeafTone
+    const { light, dark } = LEAF[tone]
+    const shade = y === 7 || px - 7 + (py - 8) > 3 || (x + y * 2) % 5 === 0
+    return shade ? dark : light
+  })
+  put(g, [
+    [8, 0, 'B'], // 잎자루
+    [4, 2, 'y'], // 하이라이트
+    [5, 2, 'y'],
+  ])
+  return g
+}
+
+/** 단풍잎 가랜드 32×16 (봄 꽃 가랜드와 같은 끈·핀·규격, 그림 y 0..10): 잎 5장 + 사이 도토리 구슬 */
+function mapleGarland(): PixelImage {
+  const W = 32
+  const img = new PixelImage(W, 16)
+  const sag = (x: number) => 1 + Math.round(5 * Math.sin((Math.PI * x) / (W - 1)))
+  for (let x = 0; x < W; x++) setKey(img, x, sag(x), 'b')
+  setKey(img, 0, 0, 'X')
+  setKey(img, W - 1, 0, 'X')
+  for (const x of [7, 13, 18, 24]) setKey(img, x, sag(x), 'n')
+  const leaves: [number, LeafTone][] = [
+    [4, 'red'],
+    [10, 'orange'],
+    [16, 'yellow'],
+    [21, 'red'],
+    [27, 'orange'],
+  ]
+  for (const [cx, tone] of leaves) {
+    const { light: L, dark: D } = LEAF[tone]
+    // 끈에 매달린 단풍잎: 위 두 갈래 + 가운데 넓은 잎 + 아래 뾰족한 끝
+    const f = outlined(art([`${L}.${L}`, `${L}${L}${L}`, `${L}${L}${D}`, `.${D}.`]))
+    img.blit(f, cx - 2, sag(cx) - 1)
+  }
+  return img
+}
+
+// ---------------------------------------------------------------------------
 // 목록
 // ---------------------------------------------------------------------------
 
@@ -612,6 +724,28 @@ export function buildDecorItems(): DecorItem[] {
       place: 'hang',
       frames: [hangItem(16, 16, rowsOf(wreath()))],
       note: '리스(벽, 맨 윗줄이 거는 점)',
+    },
+    // 가을은 나중에 추가해 시트 맨 끝에 둔다(기존 프레임 좌표가 그대로 남는다)
+    {
+      season: 'autumn',
+      item: 'maple_pot',
+      place: 'floor',
+      frames: [floorItem(16, 32, maplePot())],
+      note: '단풍나무 화분(바닥)',
+    },
+    {
+      season: 'autumn',
+      item: 'leaves',
+      place: 'floor',
+      frames: [floorItem(16, 16, leafPile())],
+      note: '낙엽 더미(바닥)',
+    },
+    {
+      season: 'autumn',
+      item: 'garland',
+      place: 'hang',
+      frames: [mapleGarland()],
+      note: '단풍잎 가랜드(벽 위, 양 끝 핀이 맨 윗줄)',
     },
   ]
 }

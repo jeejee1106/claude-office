@@ -1102,6 +1102,26 @@ function drawDecorShape(g: Graphics, kind: DecorKind, frame: number): void {
       g.rect(0, 6, 7, 1).fill(C.white)
       g.rect(6, 0, 1, 7).fill(C.white)
       break
+    case 'maplePot':
+      g.rect(4, 24, 8, 8).fill(C.pot)
+      g.rect(7, 12, 2, 12).fill(C.woodDark)
+      g.rect(1, 2, 14, 11).fill(0xd9480f)
+      g.rect(4, 4, 3, 3).fill(0xf08c00)
+      g.rect(10, 8, 3, 3).fill(C.yellow)
+      break
+    case 'leaves':
+      g.rect(1, 11, 14, 5).fill(0xd9480f)
+      g.rect(3, 8, 9, 3).fill(0xf08c00)
+      g.rect(5, 12, 2, 2).fill(C.yellow)
+      g.rect(11, 12, 2, 2).fill(C.red)
+      break
+    case 'mapleGarland':
+      g.rect(0, 1, 32, 1).fill(C.woodDark)
+      for (let i = 0; i < 4; i++) {
+        const x = 2 + i * 8
+        g.rect(x, 2 + (i % 2) * 2, 4, 4).fill(i % 2 ? C.yellow : 0xd9480f)
+      }
+      break
     case 'tree': {
       g.rect(14, 40, 4, 8).fill(C.woodDark)
       g.rect(10, 4, 12, 12).fill(C.plant)

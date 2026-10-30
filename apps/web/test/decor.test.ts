@@ -14,6 +14,7 @@ import {
   isDecorChoice,
   type PxRect,
   resolveSeason,
+  SEASON_RANGES,
   SEASONS,
   seasonEntries,
   seasonOn,
@@ -66,8 +67,9 @@ describe('계절 판정 (현지 날짜, 양 끝 포함)', () => {
     [10, 23, null],
     [10, 24, 'halloween'],
     [10, 31, 'halloween'],
-    [11, 1, null],
-    [11, 30, null],
+    [11, 1, 'autumn'],
+    [11, 15, 'autumn'],
+    [11, 30, 'autumn'],
     [12, 1, 'christmas'],
     [12, 26, 'christmas'],
     [12, 27, null],
@@ -83,15 +85,39 @@ describe('계절 판정 (현지 날짜, 양 끝 포함)', () => {
     })
   }
 
-  it('자정이 지나면 바뀐다: 10/31 23:59 할로윈 → 11/1 00:00 없음', () => {
-    expect(seasonOn(new Date(2026, 9, 31, 23, 59))).toBe('halloween')
-    expect(seasonOn(new Date(2026, 10, 1, 0, 0))).toBe(null)
+  it('자정이 지나면 바뀐다: 10/31 23:59 할로윈 → 11/1 00:00 가을', () => {
+    expect(seasonOn(new Date(2026, 9, 31, 23, 59, 59))).toBe('halloween')
+    expect(seasonOn(new Date(2026, 10, 1, 0, 0))).toBe('autumn')
+  })
+
+  it('자정이 지나면 바뀐다: 11/30 23:59 가을 → 12/1 00:00 크리스마스', () => {
+    expect(seasonOn(new Date(2026, 10, 30, 23, 59, 59))).toBe('autumn')
+    expect(seasonOn(new Date(2026, 11, 1, 0, 0))).toBe('christmas')
+  })
+
+  it('기간끼리 겹치지 않는다(어느 날이든 계절은 하나)', () => {
+    for (let d = new Date(2026, 0, 1); d.getFullYear() === 2026; d.setDate(d.getDate() + 1)) {
+      const md = (d.getMonth() + 1) * 100 + d.getDate()
+      const hits = SEASONS.filter((s) => {
+        const r = SEASON_RANGES[s]
+        return md >= r.from[0] * 100 + r.from[1] && md <= r.to[0] * 100 + r.to[1]
+      })
+      expect(hits.length, `${d.getMonth() + 1}/${d.getDate()}`).toBeLessThanOrEqual(1)
+    }
   })
 })
 
 describe('고르기 (자동·끄기·계절)', () => {
-  it('값 목록과 순서: 자동(기본)·끄기·봄·여름·할로윈·크리스마스', () => {
-    expect(DECOR_CHOICES).toEqual(['auto', 'off', 'spring', 'summer', 'halloween', 'christmas'])
+  it('값 목록과 순서: 자동(기본)·끄기·봄·여름·할로윈·가을·크리스마스', () => {
+    expect(DECOR_CHOICES).toEqual([
+      'auto',
+      'off',
+      'spring',
+      'summer',
+      'halloween',
+      'autumn',
+      'christmas',
+    ])
     expect(isDecorChoice('auto')).toBe(true)
     expect(isDecorChoice('winter')).toBe(false)
     expect(isDecorChoice(null)).toBe(false)
@@ -99,7 +125,10 @@ describe('고르기 (자동·끄기·계절)', () => {
 
   it('자동 = 날짜, 끄기 = 늘 없음, 계절 = 날짜와 상관없이 그 계절', () => {
     expect(resolveSeason('auto', day(10, 30))).toBe('halloween')
-    expect(resolveSeason('auto', day(11, 1))).toBe(null)
+    expect(resolveSeason('auto', day(11, 1))).toBe('autumn')
+    expect(resolveSeason('auto', day(1, 1))).toBe(null)
+    expect(resolveSeason('autumn', day(7, 1))).toBe('autumn')
+    expect(resolveSeason('off', day(11, 15))).toBe(null)
     expect(resolveSeason('off', day(10, 30))).toBe(null)
     expect(resolveSeason('off', day(12, 25))).toBe(null)
     expect(resolveSeason('christmas', day(10, 30))).toBe('christmas')
@@ -141,6 +170,9 @@ describe('장식 프레임 (decor.json 이름 고정)', () => {
         'deco_halloween_bat_0',
         'deco_halloween_bat_1',
         'deco_halloween_cobweb_0',
+        'deco_autumn_maple_pot_0',
+        'deco_autumn_leaves_0',
+        'deco_autumn_garland_0',
         'deco_christmas_tree_0',
         'deco_christmas_tree_1',
         'deco_christmas_gift_0',

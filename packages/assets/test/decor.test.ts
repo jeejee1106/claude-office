@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decodePng, encodePng, type PixelImage } from '../src/canvas'
 import { packDecor } from '../src/decorSheet'
-import { buildDecorFrames } from '../src/sprites/decor'
+import { buildDecorFrames, buildDecorItems } from '../src/sprites/decor'
 import { offPalettePixels } from '../src/validate'
 
 /** 화면 담당과 맞춘 프레임 이름·크기·기준점(바꾸면 씬 코드가 깨진다 — 리더에게 먼저 알린다) */
@@ -24,6 +24,9 @@ const EXPECTED: Record<string, { w: number; h: number; anchor: { x: number; y: n
   deco_christmas_tree_1: { w: 32, h: 48, anchor: FLOOR },
   deco_christmas_gift_0: { w: 16, h: 16, anchor: FLOOR },
   deco_christmas_wreath_0: { w: 16, h: 16, anchor: HANG },
+  deco_autumn_maple_pot_0: { w: 16, h: 32, anchor: FLOOR },
+  deco_autumn_leaves_0: { w: 16, h: 16, anchor: FLOOR },
+  deco_autumn_garland_0: { w: 32, h: 16, anchor: HANG },
 }
 const ANIMS: Record<string, string[]> = {
   deco_summer_fan: ['deco_summer_fan_0', 'deco_summer_fan_1'],
@@ -89,6 +92,35 @@ describe('decor frames', () => {
       'deco_halloween_bat',
       'deco_halloween_cobweb',
     ])
+    expect(Object.keys(atlas.meta.seasons)).toEqual([
+      'spring',
+      'summer',
+      'halloween',
+      'autumn',
+      'christmas',
+    ])
+    expect(atlas.meta.seasons.autumn).toEqual([
+      'deco_autumn_maple_pot',
+      'deco_autumn_leaves',
+      'deco_autumn_garland',
+    ])
+    expect(atlas.meta.place.deco_autumn_garland).toBe('hang')
+  })
+
+  it('wall garlands (spring, autumn) draw only in rows 0..10 (12px band above the window)', () => {
+    for (const name of ['deco_spring_garland_0', 'deco_autumn_garland_0']) {
+      const i = byName.get(name)?.image as PixelImage
+      expect(rowHasPixel(i, 10), name).toBe(true)
+      for (let y = 11; y < i.height; y++) expect(rowHasPixel(i, y), `${name} y${y}`).toBe(false)
+    }
+  })
+
+  it('adding autumn kept every earlier frame at the same place in the sheet', () => {
+    const { atlas } = packDecor()
+    // 가을 전 목록 = 가을 항목을 뺀 목록
+    const old = packDecor(buildDecorItems().filter((d) => d.season !== 'autumn')).atlas
+    for (const [name, f] of Object.entries(old.frames))
+      expect(atlas.frames[name]?.frame, name).toEqual(f.frame)
   })
 })
 

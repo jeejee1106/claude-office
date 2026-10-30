@@ -12,7 +12,7 @@
 
 export const DECOR_ATLAS_URL = 'assets/decor.json'
 
-export const SEASONS = ['spring', 'summer', 'halloween', 'christmas'] as const
+export const SEASONS = ['spring', 'summer', 'halloween', 'autumn', 'christmas'] as const
 export type Season = (typeof SEASONS)[number]
 
 /** 상단 바 "장식" 고르기 값. auto = 날짜로 판정(기본) */
@@ -30,6 +30,7 @@ export const SEASON_RANGES: Readonly<
   spring: { from: [3, 25], to: [4, 15] },
   summer: { from: [7, 20], to: [8, 20] },
   halloween: { from: [10, 24], to: [10, 31] },
+  autumn: { from: [11, 1], to: [11, 30] },
   christmas: { from: [12, 1], to: [12, 26] },
 }
 
@@ -66,6 +67,9 @@ export type DecorKind =
   | 'pumpkin'
   | 'bat'
   | 'cobweb'
+  | 'maplePot'
+  | 'leaves'
+  | 'mapleGarland'
   | 'tree'
   | 'gift'
   | 'wreath'
@@ -112,6 +116,13 @@ export const DECOR_SPECS: Readonly<Record<DecorKind, DecorSpec>> = {
     ink: { top: 0, bottom: 14 },
   },
   cobweb: { ...wall(['deco_halloween_cobweb_0'], 16, 16), ax: 0, ay: 0 },
+  maplePot: floor(['deco_autumn_maple_pot_0'], 16, 32),
+  leaves: floor(['deco_autumn_leaves_0'], 16, 16),
+  mapleGarland: {
+    ...wall(['deco_autumn_garland_0'], 32, 16),
+    // 봄 가랜드와 같은 규격 — 창문 위 띠(y 0..11)에 들어간다
+    ink: { top: 0, bottom: 11 },
+  },
   tree: floor(
     ['deco_christmas_tree_0', 'deco_christmas_tree_1'],
     32,
@@ -241,6 +252,17 @@ const SEASON_TABLE: Readonly<Record<Season, readonly Entry[]>> = {
     ['pumpkin', 'loungeA'],
     ['pumpkin', 'meetingLow'],
     ['pumpkin', 'archive'],
+  ],
+  autumn: [
+    ['mapleGarland', 'bandLeft'],
+    ['mapleGarland', 'bandRight'],
+    ['mapleGarland', 'lounge'],
+    ['maplePot', 'loungeB'],
+    ['maplePot', 'meetingCorner'],
+    ['leaves', 'workLeft'],
+    ['leaves', 'workRight'],
+    ['leaves', 'loungeCorner'],
+    ['leaves', 'meetingLow'],
   ],
   christmas: [
     ['tree', 'meetingCorner'],
