@@ -65,7 +65,7 @@ function stableId(parts: string[], ctx: NormalizeContext): string {
 
 /**
  * idle_prompt("다음 입력을 기다림")는 보내지 않는다: 턴이 끝난 뒤 오는 알림이라 turn.end 와 같은 뜻이고,
- * attention 으로 보내면 휴게실에서 쉬는 팀장 머리 위에 "?"가 뜬다(2026-10-23 사용자 관찰).
+ * attention 으로 보내면 휴게실에서 쉬는 팀장 머리 위에 "?"가 뜬다.
  */
 const NOTIFICATION_REASON: Readonly<Record<string, 'permission' | 'idle' | 'other'>> = {
   permission_prompt: 'permission',

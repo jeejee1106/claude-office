@@ -1,5 +1,6 @@
 _workspace/
 _workspace_*/
+notes/
 node_modules/
 dist/
 *.tsbuildinfo

@@ -26,7 +26,7 @@ interface Voice {
   notes: readonly Note[]
 }
 
-/** 전체 음량. 각 소리의 gain 에 곱한다 (2026-10-29 사용자: 2·1 은 큼. 0.5 가 안 들린 건 suspended 버그 탓으로 보임) */
+/** 전체 음량. 각 소리의 gain 에 곱한다 (1 이상은 너무 커서 0.6 으로 정함) */
 export const MASTER_GAIN = 0.6
 
 /** 소리 모양. 모두 0.1~0.4초 */
