@@ -97,7 +97,7 @@ describe('claude-office-hook 프로세스', () => {
   })
 
   it('기본 URL 은 127.0.0.1:7333/events', () => {
-    // 실제로 보내지 않는다: 켜 둔 서버에 테스트 세션(demo-app 층)이 생긴다(2026-10-26 사용자 관찰).
+    // 실제로 보내지 않는다: 켜 둔 서버에 테스트 세션(demo-app 층)이 생긴다.
     expect(DEFAULT_URL).toBe('http://127.0.0.1:7333/events')
   })
 

@@ -34,7 +34,7 @@ model: opus
 - 참고용: `claude-code-hooks`, `realtime-server`, `pixel-office-scene`의 SKILL.md를 읽고 각 모듈의 제약을 계획에 반영한다.
 
 ## 다시 호출할 때
-- `_workspace/01_architect_plan.md`가 있으면 읽고, 사용자 피드백이나 QA 결과가 지적한 부분만 고친다. 계획 전체를 새로 쓰지 않는다.
+- `_workspace/01_architect_plan.md`가 있으면 읽고, 리뷰 피드백이나 QA 결과가 지적한 부분만 고친다. 계획 전체를 새로 쓰지 않는다.
 
 ## 오류 처리
 - 요청이 모호해 모듈 분할이 두 가지 이상 가능하면 각 안의 장단점을 계획 파일 맨 위 `## 결정 필요`에 적고 리더에게 알린다. 임의로 고르지 않는다.

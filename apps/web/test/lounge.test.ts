@@ -32,7 +32,7 @@ import type { CharacterView } from '../src/scene/render/types'
 import { ev } from './helpers'
 
 /*
- * 2026-10-23 사용자 결정: 한 턴 끝 휴게실 쉬기(커피·소파 앉기·소파 눕기), 화이트보드 글씨 남기기.
+ * 기획서 3절: 한 턴 끝 휴게실 쉬기(커피·소파 앉기·소파 눕기), 화이트보드 글씨 남기기.
  */
 
 function run(events: OfficeEvent[], director = new Director({ now: () => 0 })) {

@@ -19,7 +19,7 @@
 | 날짜 | 변경 내용 | 대상 | 사유 |
 | --- | --- | --- | --- |
 | 2026-10-21 | Harness v2로 처음 구성 | 전체 | - |
-| 2026-10-21 | 경로 선택(경량·표준·전체) 추가: 계약 변경 여부와 모듈 수로 단계 깊이를 정하고, 경량·표준은 architect 생략 + 마지막 QA 1회 | skills/office-dev-orchestrator | "작은 작업인데 왜 오래 걸리냐" 피드백 (서버+웹 요청이 전 단계를 거쳐 약 40분) |
-| 2026-10-21 | 기획서 `docs/product-spec.md` 신설, architect·scene·artist와 오케스트레이터가 이를 기준으로 삼도록 연결 | agents/office-architect, office-scene-dev, pixel-artist, skills/pixel-office-scene, office-dev-orchestrator | "내가 원하는 기능을 담은 설계서가 없다" 피드백 (매핑이 임의로 정해져 있었음) |
+| 2026-10-21 | 경로 선택(경량·표준·전체) 추가: 계약 변경 여부와 모듈 수로 단계 깊이를 정하고, 경량·표준은 architect 생략 + 마지막 QA 1회 | skills/office-dev-orchestrator | 작업 크기에 비해 단계가 많아 오래 걸림 (서버+웹 요청이 전 단계를 거쳐 약 40분) |
+| 2026-10-21 | 기획서 `docs/product-spec.md` 신설, architect·scene·artist와 오케스트레이터가 이를 기준으로 삼도록 연결 | agents/office-architect, office-scene-dev, pixel-artist, skills/pixel-office-scene, office-dev-orchestrator | 기획 기준 문서가 없었음 (매핑이 임의로 정해져 있었음) |
 | 2026-10-22 | 훅 확인 기록 첫 작성: Claude Code 2.1.306 실제 캡처(서브에이전트·중첩 포함) + 공식 문서 결과 | skills/claude-code-hooks/references/hook-notes.md | collector 구현 전 확인 절차(2절) 수행 |
-| 2026-10-23 | 명령 실행 규칙 추가: `cd`·명령 연결 금지, 읽기는 Read·Grep 도구, 허용 목록 형태 그대로 실행 | CLAUDE.md | "이런거 나한테 안물어보게 설정할 수 있어?" 피드백 (`cd …; grep …` 명령마다 확인 창) |
+| 2026-10-23 | 명령 실행 규칙 추가: `cd`·명령 연결 금지, 읽기는 Read·Grep 도구, 허용 목록 형태 그대로 실행 | CLAUDE.md | 명령마다 확인 창이 떠서 (`cd …; grep …` 형태) |
