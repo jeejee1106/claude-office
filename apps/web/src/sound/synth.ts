@@ -29,34 +29,40 @@ interface Voice {
 /** 전체 음량. 각 소리의 gain 에 곱한다 (1 이상은 너무 커서 0.6 으로 정함) */
 export const MASTER_GAIN = 0.6
 
-/** 소리 모양. 모두 0.1~0.4초 */
+/**
+ * 소리 모양. 모두 0.1~0.4초.
+ * 세 소리가 헷갈리지 않게 높이·리듬·음색을 서로 다르게 둔다:
+ * 출근 = 낮고 부드러운 두 음, 확인 요청 = 아주 높고 빠른 세 번, 일 끝 = 올라가다 끝음을 길게.
+ */
 export const VOICES: Readonly<Record<SoundId, Voice>> = {
-  // 직원 출근: 짧게 올라가는 "띠링" (C5 → G5), 0.18초
+  // 직원 출근: 문 벨 "딩-동" (E5 → C5), 부드러운 삼각파, 0.37초
   spawn: {
+    wave: 'triangle',
+    gain: 0.14,
+    notes: [
+      { at: 0, dur: 0.16, freq: 659.25 },
+      { at: 0.17, dur: 0.2, freq: 523.25 },
+    ],
+  },
+  // 확인 요청: 급한 "삐삐삐" (A6 세 번), 0.21초
+  attention: {
     wave: 'square',
     gain: 0.06,
     notes: [
-      { at: 0, dur: 0.08, freq: 523.25 },
-      { at: 0.09, dur: 0.09, freq: 783.99 },
+      { at: 0, dur: 0.05, freq: 1760 },
+      { at: 0.08, dur: 0.05, freq: 1760 },
+      { at: 0.16, dur: 0.05, freq: 1760 },
     ],
   },
-  // 확인 요청: 높고 또렷한 "삐삐" (E6 두 번), 0.22초
-  attention: {
-    wave: 'square',
-    gain: 0.07,
-    notes: [
-      { at: 0, dur: 0.07, freq: 1318.51 },
-      { at: 0.13, dur: 0.09, freq: 1318.51 },
-    ],
-  },
-  // 팀장 일 끝: 내려가는 "따라란" (G5 → E5 → C5), 부드러운 삼각파, 0.34초
+  // 팀장 일 끝: 올라가는 "따-다-단!" (C5 → E5 → G5 → C6, 끝음 길게), 0.39초
   turnEnd: {
-    wave: 'triangle',
-    gain: 0.12,
+    wave: 'square',
+    gain: 0.05,
     notes: [
-      { at: 0, dur: 0.1, freq: 783.99 },
-      { at: 0.11, dur: 0.1, freq: 659.25 },
-      { at: 0.22, dur: 0.12, freq: 523.25 },
+      { at: 0, dur: 0.07, freq: 523.25 },
+      { at: 0.08, dur: 0.07, freq: 659.25 },
+      { at: 0.16, dur: 0.07, freq: 783.99 },
+      { at: 0.24, dur: 0.15, freq: 1046.5 },
     ],
   },
 }
